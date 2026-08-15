@@ -4,6 +4,8 @@ import sharp from "sharp";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
+import { detectReceiptText, isOcrConfigured } from "../lib/googleVision.js";
+import { parseReceiptText } from "../lib/receiptParser.js";
 
 export const receiptImageRouter = Router({ mergeParams: true });
 
@@ -50,9 +52,36 @@ receiptImageRouter.post("/", handleUpload, async (req, res) => {
     data: { receiptImageUrl: `/uploads/${filename}` },
   });
 
+  // OCR runs on the original (pre-compression) buffer for best text quality.
+  // Falls back to manual entry (empty extracted_items) if not configured or if it errors,
+  // per spec: "Fallback: Manual entry if OCR fails".
+  let extractedItems = [];
+  let extractedTaxAmount = 0;
+  let ocrError = null;
+  if (isOcrConfigured()) {
+    try {
+      const text = await detectReceiptText(req.file.buffer);
+      const parsed = parseReceiptText(text);
+      extractedItems = parsed.items;
+      extractedTaxAmount = parsed.taxAmount;
+      if (extractedTaxAmount > 0) {
+        await prisma.receipt.update({
+          where: { id: req.params.receiptId },
+          data: { taxAmount: extractedTaxAmount },
+        });
+      }
+    } catch (err) {
+      ocrError = err.message;
+    }
+  }
+
   res.status(201).json({
     receiptImageUrl: updated.receiptImageUrl,
     originalSize: req.file.size,
     compressedSize: compressed.size,
+    ocr_configured: isOcrConfigured(),
+    ocr_error: ocrError,
+    extracted_items: extractedItems,
+    extracted_tax_amount: extractedTaxAmount,
   });
 });

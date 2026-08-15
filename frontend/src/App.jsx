@@ -23,6 +23,11 @@ const STEP_COMPONENTS = {
   report: ReportStep,
 };
 
+const NAV_ITEMS = [
+  { key: "wizard", label: "Split" },
+  { key: "history", label: "Riwayat" },
+];
+
 function WizardScreen() {
   const step = useSplitStore((s) => s.step);
   const currentIndex = STEPS.findIndex((s) => s.key === step);
@@ -67,28 +72,27 @@ function App() {
           {screen === "wizard" && title && <p className="mt-1 text-sm text-slate-500">{title}</p>}
         </div>
         <nav className="flex gap-1 rounded-md bg-slate-100 p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setScreen("wizard")}
-            className={`rounded px-3 py-1.5 font-medium ${
-              screen === "wizard" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-            }`}
-          >
-            Split
-          </button>
-          <button
-            type="button"
-            onClick={() => setScreen("history")}
-            className={`rounded px-3 py-1.5 font-medium ${
-              screen === "history" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-            }`}
-          >
-            Riwayat
-          </button>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setScreen(item.key)}
+              className={`rounded px-3 py-1.5 font-medium ${
+                screen === item.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
       </div>
 
-      {screen === "wizard" ? <WizardScreen /> : <div className="mt-8"><HistoryPage /></div>}
+      {screen === "wizard" && <WizardScreen />}
+      {screen === "history" && (
+        <div className="mt-8">
+          <HistoryPage />
+        </div>
+      )}
     </div>
   );
 }

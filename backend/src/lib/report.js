@@ -10,10 +10,16 @@ export function formatSettlementReport(receipt, settlements) {
     (s) => `${s.owerName} bayar ke ${s.payerName}: ${formatRupiah(s.amount)}`
   );
 
+  const tax = Number(receipt.taxAmount) || 0;
+  const subtotal = Number(receipt.totalAmount) - tax;
+
   const text = [
     heading,
     receipt.merchantName ? `(${receipt.merchantName})` : null,
     `Dibayar oleh: ${receipt.payerName}`,
+    "",
+    `Subtotal: ${formatRupiah(subtotal)}`,
+    tax > 0 ? `Pajak/service: ${formatRupiah(tax)}` : null,
     `Total: ${formatRupiah(receipt.totalAmount)}`,
     "",
     lines.length > 0 ? "Rincian:" : "Belum ada settlement untuk dilaporkan.",

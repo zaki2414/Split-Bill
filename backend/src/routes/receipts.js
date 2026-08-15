@@ -15,7 +15,8 @@ receiptsRouter.get("/", async (req, res) => {
 
 // POST /api/receipts - start a split: title, payer, people, receipt basics (manual entry, no OCR yet)
 receiptsRouter.post("/", async (req, res) => {
-  const { title, payerName, uploadedBy, merchantName, receiptDate, totalAmount, notes, people } = req.body;
+  const { title, payerName, uploadedBy, merchantName, receiptDate, totalAmount, taxAmount, notes, people } =
+    req.body;
 
   if (!payerName) {
     return res.status(400).json({ error: "payerName is required" });
@@ -32,6 +33,7 @@ receiptsRouter.post("/", async (req, res) => {
       merchantName,
       receiptDate: receiptDate ? new Date(receiptDate) : undefined,
       totalAmount,
+      taxAmount: taxAmount ?? 0,
       notes,
       people: {
         create: (people || []).map((personName) => ({ personName })),
@@ -41,6 +43,18 @@ receiptsRouter.post("/", async (req, res) => {
   });
 
   res.status(201).json(receipt);
+});
+
+// PUT /api/receipts/:id - update basic fields (e.g. taxAmount auto-filled from OCR)
+receiptsRouter.put("/:id", async (req, res) => {
+  const { title, payerName, merchantName, totalAmount, taxAmount, notes } = req.body;
+
+  const receipt = await prisma.receipt.update({
+    where: { id: req.params.id },
+    data: { title, payerName, merchantName, totalAmount, taxAmount, notes },
+  });
+
+  res.json(receipt);
 });
 
 // GET /api/receipts/:id - receipt with people + items + allocations
@@ -98,6 +112,7 @@ receiptsRouter.post("/:id/settlements/calculate", async (req, res) => {
     allocations: receipt.allocations,
     payerName: receipt.payerName,
     totalAmount: receipt.totalAmount,
+    taxAmount: receipt.taxAmount,
   });
 
   await prisma.$transaction([

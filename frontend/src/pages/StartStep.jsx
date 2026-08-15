@@ -6,6 +6,7 @@ import { useSplitStore } from "../store/splitStore";
 export default function StartStep() {
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
+  const [taxAmount, setTaxAmount] = useState("");
   const [payerName, setPayerName] = useState("");
   const [people, setPeople] = useState([]);
   const [personDraft, setPersonDraft] = useState("");
@@ -33,7 +34,16 @@ export default function StartStep() {
         })
         .then((res) => res.data);
     },
-    onSuccess: () => setStep("items"),
+    onSuccess: async (data) => {
+      if (data.extracted_items?.length > 0) {
+        await Promise.all(
+          data.extracted_items.map((item) =>
+            api.post(`/api/receipts/${createdReceiptId}/items`, item)
+          )
+        );
+      }
+      setStep("items");
+    },
   });
 
   const addPerson = () => {
@@ -58,6 +68,7 @@ export default function StartStep() {
       title,
       payerName,
       totalAmount: Number(totalAmount),
+      taxAmount: taxAmount ? Number(taxAmount) : 0,
       people,
     });
   };
@@ -68,7 +79,8 @@ export default function StartStep() {
         <div>
           <label className="block text-sm font-medium text-slate-700">Foto struk (opsional)</label>
           <p className="mt-1 text-xs text-slate-400">
-            Foto akan dikompres otomatis sebelum disimpan.
+            Foto akan dikompres otomatis. Kalau OCR aktif, item-item akan dicoba
+            diekstrak otomatis (tetap bisa dikoreksi di step Items).
           </p>
           <input
             type="file"
@@ -117,12 +129,28 @@ export default function StartStep() {
 
       <div>
         <label className="block text-sm font-medium text-slate-700">Total tagihan (Rp)</label>
+        <p className="mt-1 text-xs text-slate-400">Total akhir di struk, sudah termasuk pajak/service.</p>
         <input
           type="number"
           min="0"
           value={totalAmount}
           onChange={(e) => setTotalAmount(e.target.value)}
           placeholder="120000"
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Pajak / service charge (opsional, Rp)</label>
+        <p className="mt-1 text-xs text-slate-400">
+          Dibagi proporsional sesuai porsi makanan tiap orang, bukan rata.
+        </p>
+        <input
+          type="number"
+          min="0"
+          value={taxAmount}
+          onChange={(e) => setTaxAmount(e.target.value)}
+          placeholder="12500"
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
         />
       </div>

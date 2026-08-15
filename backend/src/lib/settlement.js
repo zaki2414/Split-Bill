@@ -2,7 +2,9 @@
 //
 // SHARED item: total_price split equally among distinct consumers.
 // INDIVIDUAL item: each consumer pays unit_price * quantity_allocated (default 1).
-export function calculateSettlements({ items, allocations, payerName, totalAmount }) {
+// taxAmount (tax/service charge on top of item prices) is distributed proportionally
+// to each person's item consumption, not split evenly - someone who ate more pays more tax.
+export function calculateSettlements({ items, allocations, payerName, totalAmount, taxAmount = 0 }) {
   const allocationsByItem = new Map();
   for (const alloc of allocations) {
     if (!allocationsByItem.has(alloc.itemId)) allocationsByItem.set(alloc.itemId, []);
@@ -38,6 +40,19 @@ export function calculateSettlements({ items, allocations, payerName, totalAmoun
     }
   }
 
+  const tax = Number(taxAmount) || 0;
+  if (tax > 0) {
+    const subtotal = Object.values(consumptionByPerson).reduce((sum, v) => sum + v, 0);
+    if (subtotal > 0) {
+      for (const person of Object.keys(consumptionByPerson)) {
+        const taxShare = (consumptionByPerson[person] / subtotal) * tax;
+        consumptionByPerson[person] += taxShare;
+      }
+    } else {
+      warnings.push(`Tax/service (${tax.toFixed(2)}) could not be distributed - no item consumption yet`);
+    }
+  }
+
   const settlements = [];
   for (const [person, amount] of Object.entries(consumptionByPerson)) {
     if (person === payerName) continue;
@@ -49,7 +64,7 @@ export function calculateSettlements({ items, allocations, payerName, totalAmoun
   const diff = Math.abs(totalConsumed - Number(totalAmount));
   if (diff > 0.01) {
     warnings.push(
-      `Allocated total (${totalConsumed.toFixed(2)}) does not match receipt total (${Number(totalAmount).toFixed(2)})`
+      `Allocated total incl. tax (${totalConsumed.toFixed(2)}) does not match receipt total (${Number(totalAmount).toFixed(2)})`
     );
   }
 
