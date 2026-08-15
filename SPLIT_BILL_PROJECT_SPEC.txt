@@ -914,7 +914,7 @@ When done, create a blog post / portfolio page covering:
 
 10. Source Code Link
     - GitHub repo link
-    - Live demo link: splitbill.hilmi.dev
+    - Live demo link: splitbill.jjeeeekiiii.dev
     - Docker setup instructions
 
 

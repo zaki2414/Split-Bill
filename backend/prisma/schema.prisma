@@ -25,6 +25,7 @@ model User {
 model Receipt {
   id String @id @default(uuid()) @db.Uuid
 
+  title      String? @db.VarChar(150) // e.g. "Buka Puasa Bareng" - set when the split starts
   uploadedBy String? @map("uploaded_by") @db.VarChar(100)
   payerName  String  @map("payer_name") @db.VarChar(100)
 
@@ -39,11 +40,26 @@ model Receipt {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  people      ReceiptPerson[]
   items       ReceiptItem[]
   allocations ItemAllocation[]
   settlements Settlement[]
 
   @@map("receipts")
+}
+
+// Roster of participants set when the split starts (title + who's in it),
+// before any items or allocations exist. Independent of ItemAllocation's
+// free-text person_name so the allocation form has names to show from step one.
+model ReceiptPerson {
+  id         String  @id @default(uuid()) @db.Uuid
+  receiptId  String  @map("receipt_id") @db.Uuid
+  receipt    Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  personName String  @map("person_name") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("receipt_people")
 }
 
 // item_type determines allocation calculation: SHARED or INDIVIDUAL
