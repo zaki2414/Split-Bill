@@ -1,0 +1,1201 @@
+================================================================================
+                    SPLIT BILL APP - PROJECT SPECIFICATION
+================================================================================
+
+PROJECT OVERVIEW
+================================================================================
+Split Bill adalah aplikasi web untuk membagi pengeluaran grup (restoran, gocar, 
+belanja bersama, dll) dengan fitur:
+  1. Receipt scanning via OCR (Google Vision - foto struk → ekstrak items)
+  2. Item-first allocation form (siapa aja yang makan menu ini?)
+  3. Automatic settlement calculation (siapa bayar siapa)
+  4. History & reporting
+  5. Flexible item sharing (SHARED vs INDIVIDUAL allocation)
+  6. Optional user registration for balance tracking
+
+Key Insight:
+  - Tidak perlu fixed groups → beda orang per split
+  - Cukup input nama (text) → tidak wajib register
+  - Payer selection mandatory → determine settlement flow
+  - Item type selection → control allocation logic
+  - Item-first allocation (faster than drag-drop, more natural)
+  - Optional user account untuk track personal balance
+
+Target: Portfolio project untuk showcase cloud deployment + smart UX design
+
+
+PROJECT GOALS
+================================================================================
+Technical:
+  - Learn cloud database (Railway PostgreSQL)
+  - Integrate OCR (Google Cloud Vision API)
+  - Implement item-first allocation form
+  - Understand settlement algorithms
+  - Deploy production-ready app
+
+Portfolio:
+  - Show full-stack capability
+  - Cloud API integration knowledge
+  - Smart UX design (item-first pattern)
+  - Cost-optimization skills (free tier usage)
+  - React UI/UX skills
+  - Backend API design
+
+
+TECH STACK
+================================================================================
+
+Frontend:
+  - React 18 + Vite (fast build)
+  - TailwindCSS (styling)
+  - React Query (data fetching)
+  - Zustand (state management)
+  - React Beautiful DND (drag-drop)
+  - Deployed: Vercel (splitbill.hilmi.dev)
+
+Backend:
+  - Node.js + Express
+  - PostgreSQL (Railway)
+  - Google Cloud Vision API (OCR - FREE tier)
+  - Deployed: Railway (api.splitbill.hilmi.dev)
+
+Database:
+  - PostgreSQL on Railway
+  - 5GB free tier
+  - Auto-backups included
+  - Cost: $0-3/month
+
+
+DOMAIN & DEPLOYMENT
+================================================================================
+Frontend: splitbill.jjeeeekiiii.dev (Vercel)
+Backend:  api.splitbill.jjeeeekiiii.dev (Railway)
+Database: railway.app (PostgreSQL)
+
+Setup:
+  1. Register Railway account
+  2. Add PostgreSQL plugin ($7/month, included in platform)
+  3. Get DATABASE_URL from Railway
+  4. Setup Vercel project (connect GitHub)
+  5. Add CNAME records to hilmi.dev DNS
+
+
+DATABASE SCHEMA
+================================================================================
+
+DESIGN PHILOSOPHY:
+  - No fixed groups or required registration
+  - Flexible naming: just type person names (VARCHAR)
+  - Optional user accounts for balance tracking
+  - Payer selection is mandatory (determine settlement)
+  - Item type selection controls allocation logic
+
+-- Users (OPTIONAL - for account tracking only)
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) UNIQUE,
+  phone VARCHAR(20),
+  avatar_url VARCHAR,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Receipt (core entity - minimal required fields)
+CREATE TABLE receipts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- WHO: People involved (as text, no FK required)
+  uploaded_by VARCHAR(100),           -- who uploaded (optional text)
+  payer_name VARCHAR(100) NOT NULL,   -- who paid this receipt (MANDATORY!)
+  
+  -- WHAT: Receipt details
+  receipt_image_url VARCHAR,
+  merchant_name VARCHAR(100),
+  receipt_date TIMESTAMP,
+  total_amount DECIMAL(10, 2) NOT NULL,
+  notes TEXT,
+  
+  -- STATUS
+  status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'finalized', 'settled'
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Items extracted from receipt (via OCR)
+-- IMPORTANT: item_type determines allocation calculation
+CREATE TABLE receipt_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  receipt_id UUID REFERENCES receipts(id) ON DELETE CASCADE,
+  
+  name VARCHAR(100) NOT NULL,
+  category VARCHAR(50), -- 'food', 'drink', 'transport', 'other'
+  
+  -- For calculation
+  total_price DECIMAL(10, 2) NOT NULL,
+  quantity INT NOT NULL,  -- qty of this item in receipt
+  unit_price DECIMAL(10, 2),  -- price per unit (if qty > 1)
+  
+  -- CRITICAL: Item allocation type
+  -- SHARED: price divided equally among consumers
+  --   e.g., Pizza (Rp60k, 3 people) → each pays Rp20k
+  -- INDIVIDUAL: each person pays unit_price × qty they consumed
+  --   e.g., Soda (Rp10k each, qty 3) → person pays Rp10k per soda
+  item_type VARCHAR(20) NOT NULL, -- 'SHARED' or 'INDIVIDUAL'
+  
+  order_index INT, -- for display order
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Allocation (item assigned to person, with quantity)
+-- person_name: flexible, just text (no FK to users table)
+CREATE TABLE item_allocations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  receipt_id UUID REFERENCES receipts(id) ON DELETE CASCADE,
+  item_id UUID REFERENCES receipt_items(id) ON DELETE CASCADE,
+  
+  -- Person: just name, no FK (flexible!)
+  person_name VARCHAR(100) NOT NULL,
+  
+  -- Quantity allocated to this person
+  -- For SHARED: always 1 (or null, not used)
+  -- For INDIVIDUAL: qty they consumed (e.g., 1 soda, 0.5 pizza)
+  quantity_allocated DECIMAL(5, 2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Settlement (auto-calculated: who owes who)
+CREATE TABLE settlements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  receipt_id UUID REFERENCES receipts(id) ON DELETE CASCADE,
+  
+  -- Both as text (flexible, matches person_name from allocations)
+  payer_name VARCHAR(100) NOT NULL,    -- who will receive money
+  ower_name VARCHAR(100) NOT NULL,     -- who will pay
+  
+  amount DECIMAL(10, 2) NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'paid', 'cancelled'
+  paid_at TIMESTAMP,
+  notes TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Payment history (optional - for tracking actual transfers)
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  settlement_id UUID REFERENCES settlements(id),
+  
+  sender_name VARCHAR(100),           -- who sent money
+  receiver_name VARCHAR(100),         -- who received
+  
+  amount DECIMAL(10, 2),
+  payment_method VARCHAR(50),         -- 'manual', 'transfer', 'cash'
+  proof_url VARCHAR,                  -- optional screenshot
+  paid_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Personal Balance Tracking (optional, for registered users)
+-- Matches person_name with user accounts when they register
+CREATE TABLE person_to_user (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_name VARCHAR(100) NOT NULL,  -- from allocations/settlements
+  user_id UUID REFERENCES users(id),  -- linked account
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+
+FEATURES BREAKDOWN
+================================================================================
+
+1. AUTHENTICATION
+   - Optional: Email-based registration (for balance tracking)
+   - No password required: Email magic link or anonymous
+   - Authorization: Registered users can see their personal balance
+   - Unregistered: Can still create/view receipts with just names
+   - Optional: Google/Facebook OAuth for convenience
+
+2. RECEIPT UPLOAD & OCR (Google Vision Free Tier)
+   
+   Why Google Vision Free Tier?
+   - Free: 300 requests/month (covers MVP)
+   - Accuracy: 95% (same as Claude Vision)
+   - Speed: 1-2 seconds
+   - Cost: FREE for MVP phase, then $1.50/1000 req
+   - Setup: Easy (Google Cloud API key)
+   
+   Flow:
+   1. User upload receipt image
+   2. MANDATORY: Select "Who paid this receipt?" (payer_name)
+   3. Backend call Google Vision API
+   4. Parse response → extract items (name, qty, price)
+   5. Store in receipt_items table
+   6. Show extracted items for review/correction
+   7. Fallback: Manual entry if OCR fails
+
+   Google Vision API Configuration:
+   - Endpoint: google.cloud.vision.ImageAnnotatorClient()
+   - Model: TEXT_DETECTION (for receipt text)
+   - Language: Supports Indonesian (bahasa Indonesia)
+   - Response: Structured text with confidence scores
+   - Error handling: Try OCR, fallback to manual if >5 sec
+
+   Implementation:
+   - Create Google Cloud project
+   - Enable Vision API
+   - Generate API key (not OAuth, simpler)
+   - Add to .env: GOOGLE_VISION_API_KEY
+   - Call API with base64 image data
+   - Parse TEXT_DETECTION response
+   - Extract items from response
+
+   Future Enhancement (V2+):
+   - Add PaddleOCR fallback (if Google fails)
+   - Hybrid: PaddleOCR first (free) → Google (fallback)
+   - Reduces API cost when both work
+
+3. DRAG-DROP ALLOCATION UI
+   UI Layout:
+   - Left panel: Available items (showing qty remaining)
+   - Right panel: Person columns (dynamic, as many as needed)
+   
+   Interaction:
+   - Drag item → drop to person column
+   - Item qty decreases in available pool
+   - When 100% allocated: Item disappears from left panel
+   - Click X on item to remove from person (returns to pool)
+   - Backend auto-saves after each action
+
+   Item Type Behavior:
+   - SHARED item: Consuming person contributes to shared allocation
+     * Allocation UI shows: "Pizza - You + 2 others"
+     * Price calculated at settlement: total ÷ 3
+   
+   - INDIVIDUAL item: Quantity matters
+     * Allocation shows: "Soda ×1", "Soda ×2", etc
+     * Price per person: unit_price × qty allocated
+
+   States Display:
+   - Item fully allocated: Greyed out, disappears from available
+   - Item partially allocated: Show "3/5 allocated" remaining
+   - Item unallocated: Highlight in warning color
+   - Person total: Auto-update as items drag-dropped
+
+4. ITEM-FIRST ALLOCATION FORM (MVP - Simple & Fast)
+   
+   Why Item-First vs Person-First?
+   - Real-world behavior: Groups discuss PER ITEM (not per person)
+   - Example: Waiter asks "Ikan Bakar siapa?" → group answers together
+   - Speed: ~1-2 minutes (vs 2-3 min for person-first)
+   - Natural conversation flow
+   - Better for group dynamics
+   - Less error-prone (group confirms together)
+
+   Flow:
+   1. Upload receipt + select items
+   2. System shows form for each item:
+      "Ikan Bakar Matah (Rp40k) - Siapa aja yang makan?"
+      [✓] Adi
+      [✓] Candra
+      [ ] Budi
+      [ ] Diana
+      [ ] Eka
+      [ ] Fiona
+      [ ] Gita
+      [ ] Hendy
+      
+   3. User checks boxes for each person who consumed that item
+   4. Next item: "Ikan Bakar Tauco (Rp50k) - Siapa aja?"
+   5. Repeat until all items allocated
+   6. System validates (everyone has allocation) + calculates settlement
+
+   Advantages:
+   - ✓ Fastest allocation method (~1-2 min)
+   - ✓ Handles ambiguous items perfectly
+   - ✓ Natural group conversation flow
+   - ✓ Less individual decision fatigue
+   - ✓ Group verification (less mistakes)
+   - ✓ Simple to implement (forms + checkboxes)
+   - ✓ No AI needed (works 100% of time)
+
+   Implementation:
+   - Create form per item
+   - Checkboxes for person selection
+   - Show item type + price for clarity
+   - Auto-advance to next item
+   - Summary at end before confirm
+
+   Edge cases handled:
+   - Shared dishes (multiple people check same item)
+   - Individual items (1 person checks)
+   - Mixed types (both shared and individual)
+   - Ambiguous items (no guessing needed)
+
+5. SETTLEMENT CALCULATION & SUMMARY (AUTO-CALCULATED)
+   
+   Core Logic:
+   - For each person: Calculate total_owed based on item_type
+   - Payer (who paid receipt) receives from others
+   - Generate settlement records
+
+   Calculation Per Item Type:
+
+   A. SHARED Item Calculation:
+      - Pizza (SHARED, Rp60k, 3 consumers)
+      - For each consumer:
+        * Check if they're in item_allocations for this item
+        * If yes: allocated_price = total_price / count(consumers)
+        * Rp60k / 3 = Rp20k each
+      
+   B. INDIVIDUAL Item Calculation:
+      - Soda (INDIVIDUAL, Rp10k unit_price, qty 3)
+      - For each consumer:
+        * allocated_price = unit_price × quantity_allocated_to_person
+        * Adi (qty 1): Rp10k × 1 = Rp10k
+        * Budi (qty 1): Rp10k × 1 = Rp10k
+        * Candra (qty 1): Rp10k × 1 = Rp10k
+
+   Complete Pizza Hut Example:
+   Receipt: Payer = Adi, Total = Rp120k
+   
+   Items:
+   - Pizza (Rp60k, SHARED)
+   - Soda (Rp30k, INDIVIDUAL, Rp10k each, qty 3)
+   - Nugget (Rp30k, INDIVIDUAL, qty 1)
+   
+   Allocations:
+   - Adi: Pizza (SHARED), Soda ×1
+   - Budi: Pizza (SHARED), Soda ×1, Nugget ×1
+   - Candra: Pizza (SHARED), Soda ×1
+   
+   Calculation:
+   Adi consumed:
+     * Pizza: Rp60k / 3 = Rp20k (SHARED)
+     * Soda: Rp10k × 1 = Rp10k (INDIVIDUAL)
+     * Total: Rp30k
+   
+   Budi consumed:
+     * Pizza: Rp60k / 3 = Rp20k (SHARED)
+     * Soda: Rp10k × 1 = Rp10k (INDIVIDUAL)
+     * Nugget: Rp30k × 1 = Rp30k (INDIVIDUAL)
+     * Total: Rp60k
+   
+   Candra consumed:
+     * Pizza: Rp60k / 3 = Rp20k (SHARED)
+     * Soda: Rp10k × 1 = Rp10k (INDIVIDUAL)
+     * Total: Rp30k
+   
+   Settlement (Adi paid Rp120k total):
+   - Adi consumed: Rp30k
+     * Adi is owed: Rp120k - Rp30k = Rp90k
+   - Budi consumed: Rp60k
+     * Budi owes Adi: Rp60k
+   - Candra consumed: Rp30k
+     * Candra owes Adi: Rp30k
+   
+   Result:
+   - Budi → Adi: Rp60k ✓
+   - Candra → Adi: Rp30k ✓
+   - Total match: Rp90k ✓
+
+6. HISTORY & REPORTING
+   - Per group: List of all receipts
+   - Per person: Personal balance (how much owe/are owed)
+   - Export: PDF invoice / shareable link
+   - Statistics: Total spent, average per person
+
+7. OPTIONAL: AI TRAINING
+   - Collect user allocations over time
+   - Fine-tune Claude on split patterns (optional)
+   - Improve suggestions for specific groups
+
+
+API ENDPOINTS
+================================================================================
+
+Authentication (Optional):
+  POST   /api/auth/signup           - Create account (email + name)
+  POST   /api/auth/login            - Email magic link
+  GET    /api/auth/verify/:token    - Verify email
+  POST   /api/auth/logout           - Logout
+
+Receipts (Core Endpoints):
+  POST   /api/receipts/upload       - Upload image + OCR
+    Body: {
+      image: base64_or_file,
+      payer_name: "Adi",            ← MANDATORY
+      receipt_date: "2024-01-15",
+      merchant_name: "Pizza Hut"
+    }
+    Response: {
+      receipt_id: "uuid",
+      extracted_items: [{
+        name: "Pizza",
+        total_price: 60000,
+        quantity: 1,
+        item_type: "SHARED"           ← Default: need user selection
+      }]
+    }
+
+  GET    /api/receipts/:id          - Get receipt details
+  PUT    /api/receipts/:id          - Update payer_name, merchant, notes
+  DELETE /api/receipts/:id          - Delete receipt
+
+Items (with item_type):
+  GET    /api/receipts/:id/items    - List all items
+  PUT    /api/receipts/:id/items/:itemId - Update item
+    Body: {
+      item_type: "SHARED" or "INDIVIDUAL",
+      name: "Pizza",
+      total_price: 60000,
+      quantity: 1,
+      unit_price: 60000
+    }
+
+Allocations (Item-First Form):
+  POST   /api/allocations/batch      - Create multiple allocations at once
+    Body: {
+      receipt_id: "uuid",
+      allocations: [
+        {
+          item_id: "uuid",
+          person_names: ["Adi", "Candra"]  ← Multiple people per item
+        },
+        {
+          item_id: "uuid",
+          person_names: ["Budi", "Eka"]
+        }
+      ]
+    }
+    Response: {
+      success: true,
+      allocation_count: 8,
+      validation_warnings: []
+    }
+  
+  GET    /api/receipts/:id/allocation-form - Get form data
+    Response: {
+      receipt_id: "uuid",
+      items: [
+        {
+          id: "uuid",
+          name: "Ikan Bakar Matah",
+          price: 40000,
+          type: "SHARED",
+          order: 1
+        },
+        ...
+      ],
+      people: ["Adi", "Budi", "Candra", ...]
+    }
+  
+  GET    /api/allocations/:receipt_id/summary - Get allocation summary
+    Response: {
+      allocations: {
+        "Adi": ["Ikan Matah", "Soto", "Teh"],
+        "Budi": ["Ikan Tauco", "Gado", "Kopi"],
+        ...
+      },
+      status: "ready_to_calculate"
+    }
+
+Settlements (Auto-calculated):
+  GET    /api/settlements/:receiptId - Get all settlements
+    Response: [{
+      payer_name: "Adi",            ← Who receives
+      ower_name: "Budi",            ← Who pays
+      amount: 60000,
+      status: "pending"
+    }]
+  
+  POST   /api/settlements/:id/pay   - Mark settlement as paid
+    Body: { status: "paid", notes: "Transferred via Gopay" }
+
+Personal Balance (Optional, for registered users):
+  GET    /api/balance/:person_name  - Get balance for person
+    Response: {
+      person_name: "Adi",
+      total_owed_to_me: 90000,      ← Others owe Adi
+      total_i_owe: 0,                ← Adi owes to others
+      net_balance: 90000,
+      transactions: [...]
+    }
+
+Reports:
+  GET    /api/reports/receipt/:id/pdf - Export receipt as PDF
+  GET    /api/reports/personal/:person_name - Personal statement
+
+
+IMPLEMENTATION PHASES
+================================================================================
+
+PHASE 1: Core Setup & Database (Week 1)
+---------
+Tasks:
+  ☐ Setup Railway PostgreSQL
+  ☐ Setup Vercel project
+  ☐ Create database schema (flexible naming approach)
+  ☐ Setup optional auth (email only)
+  ☐ Test database connections
+  ☐ Deploy skeleton
+  
+Deliverable: Empty app, database ready, no features yet
+
+PHASE 2: Receipt Upload & Google Vision OCR (Week 2)
+---------
+Tasks:
+  ☐ Setup Google Cloud project
+  ☐ Enable Vision API
+  ☐ Create API key (not OAuth)
+  ☐ Add to .env: GOOGLE_VISION_API_KEY
+  
+  ☐ Build upload form UI:
+    * Receipt image input
+    * MANDATORY: "Who paid this?" (payer_name text field)
+    * Optional: Receipt date, merchant name
+  
+  ☐ Implement Google Vision integration:
+    * Convert image to base64
+    * Call google.cloud.vision.ImageAnnotatorClient()
+    * TEXT_DETECTION for receipt text extraction
+    * Parse response → extract items (name, qty, price)
+  
+  ☐ Backend OCR processing:
+    * Store in receipt_items table
+    * Add item_type default (SHARED or INDIVIDUAL)
+    * Handle OCR errors gracefully
+  
+  ☐ Show OCR results for review:
+    * Display extracted items
+    * Allow manual edit/correction
+    * Fallback: Manual entry if OCR fails (>5 sec or error)
+  
+  ☐ Test with:
+    * 10 different receipt formats
+    * Indonesian language receipts
+    * Blurry/angled photos
+    * Manual entry fallback
+
+Deliverable: Can upload receipt → Google Vision reads it → see extracted items
+
+Cost for this phase: $0 (within Google's free tier of 300 req/month)
+
+PHASE 3: Item Type Selection (Week 2)
+---------
+Tasks:
+  ☐ For each item: add type selector UI (SHARED vs INDIVIDUAL)
+  ☐ Default logic:
+    * Food items (pizza, entree, dishes) → SHARED
+    * Drinks (soda, beer, drinks) → INDIVIDUAL
+    * Transport (gocar) → SHARED
+  ☐ Allow user to manually toggle type
+  ☐ Show preview: "Pizza will be divided equally among consumers"
+  ☐ Store item_type in database
+  ☐ Test with mixed receipt types
+
+Deliverable: Items have type selection, stored correctly
+
+PHASE 4: Item-First Allocation Form (Week 3) ⭐ CORE FEATURE
+---------
+This is the MAIN allocation method for MVP (not drag-drop)
+
+Tasks:
+  ☐ Build form-based allocation UI (item-first):
+    * For each item: "Siapa aja yang makan/minum?"
+    * Display checkboxes for all people
+    * Show item name + price + type indicator
+    * Auto-advance to next item after selection
+  ☐ Smart validation:
+    * Ensure everyone allocated to at least 1 item
+    * Warn if item has 0 consumers
+  ☐ Summary screen before confirm:
+    * Show allocation matrix (people × items)
+    * Allow edit/go back
+  ☐ Backend save allocation after confirm
+  ☐ Test with:
+    * Simple receipts (pizza + drinks)
+    * Complex receipts (8 people, 8 different items)
+    * Ambiguous shared dishes (multiple ikan varieties)
+
+Deliverable: Fast, intuitive item-first allocation (1-2 min per receipt)
+
+PHASE 5: Settlement Calculation (Week 3-4)
+---------
+Tasks:
+  ☐ Implement settlement algorithm:
+    * For SHARED items: price / number_of_consumers
+    * For INDIVIDUAL items: unit_price × quantity_allocated
+  ☐ Calculate per-person total_owed
+  ☐ Calculate settlement: ower_name → payer_name for amount
+  ☐ Store settlement records
+  ☐ Validate: sum(settlements) = total_receipt
+  ☐ UI for settlement summary
+  ☐ Show clear breakdown per person
+  ☐ Test with Pizza Hut example and edge cases
+
+Deliverable: Accurate settlement calculation for all item types
+
+PHASE 6: History & Balance Tracking (Week 4)
+---------
+Tasks:
+  ☐ Build dashboard (list receipts)
+  ☐ Receipt detail view with full breakdown
+  ☐ Personal balance (for registered users):
+    * Show what they owe
+    * Show what others owe them
+    * Across all receipts
+  ☐ Mark payment as done
+  ☐ Payment history view
+  ☐ Export receipt to PDF
+  ☐ Group stats if needed
+
+Deliverable: Full history + personal balance tracking
+
+PHASE 7: Polish & Deploy (Week 4-5)
+---------
+Tasks:
+  ☐ Mobile responsive design
+  ☐ Error handling & validation
+  ☐ Loading states for API calls
+  ☐ Edge cases:
+    * Very large receipts (100+ items)
+    * Many people (10+)
+    * All different items (8 people, 8 dishes)
+  ☐ Performance optimization
+  ☐ Security review (input sanitization)
+  ☐ Documentation + code comments
+  ☐ Final deployment to Vercel + Railway
+  ☐ Test allocation form UX extensively
+
+Deliverable: Production-ready, shareable app
+
+PHASE 8 (V2+): Future Enhancements (Optional)
+---------
+After MVP is live, consider:
+  ☐ Drag-drop UI (alternative to form)
+  ☐ AI split suggestions (when helpful)
+  ☐ Person-first allocation option
+  ☐ Advanced analytics
+  ☐ Group balance history
+  ☐ Payment reminders
+
+
+DEVELOPMENT SETUP
+================================================================================
+
+Prerequisites:
+  - Node.js 18+
+  - Git
+  - Railway CLI (optional)
+  - Vercel CLI (optional)
+
+Backend Setup:
+  1. git clone <repo>
+  2. cd backend
+  3. npm install
+  4. Create .env:
+     DATABASE_URL=postgresql://user:pass@host:5432/db
+     ANTHROPIC_API_KEY=sk-...
+     NODE_ENV=development
+     PORT=3000
+  5. npx prisma migrate dev
+  6. npm run dev
+
+Frontend Setup:
+  1. cd frontend
+  2. npm install
+  3. Create .env:
+     VITE_API_URL=http://localhost:3000
+     VITE_APP_NAME=SplitBill
+  4. npm run dev
+  5. Visit http://localhost:5173
+
+Database Management:
+  - Use Railway dashboard: https://railway.app
+  - Or Prisma Studio: npx prisma studio
+  - Backups: Auto-managed by Railway
+
+
+TRAINING & AI INTEGRATION
+================================================================================
+
+Phase 1: Basic Prompting (Week 1-2)
+  - Use few-shot prompting for split suggestions
+  - Example: 3-5 sample allocations in prompt
+  - No fine-tuning yet
+
+Phase 2: Data Collection (Week 3-4)
+  - Store user allocations in database
+  - Collect 50-100 examples from testing
+  - Format: {items: [...], split: {...}, notes: "why"}
+
+Phase 3: Optional Fine-tuning (Week 5+)
+  - Analyze collected data
+  - Identify patterns (food vs transport splits)
+  - Fine-tune Claude (if Anthropic API supports)
+  - Improve over time
+
+Training Data Format:
+{
+  "id": "allocation_001",
+  "receipt": {
+    "items": [
+      {"name": "Nasi Kuning", "qty": 2, "price": 30000},
+      {"name": "Teh Manis", "qty": 3, "price": 5000}
+    ],
+    "people": ["Alice", "Bob", "Charlie"]
+  },
+  "allocation": {
+    "Alice": {"Nasi Kuning": 1.2, "Teh Manis": 1},
+    "Bob": {"Nasi Kuning": 0.8, "Teh Manis": 1.5},
+    "Charlie": {"Teh Manis": 0.5}
+  },
+  "notes": "Alice + Bob ate, Charlie cuma minum"
+}
+
+
+TESTING STRATEGY
+================================================================================
+
+Unit Tests:
+  - Settlement algorithm (different scenarios)
+  - OCR parsing edge cases
+  - Allocation validation
+
+Integration Tests:
+  - Upload receipt → OCR → allocation → settlement
+  - User flow: create group → add members → split receipt
+
+E2E Tests:
+  - Selenium/Playwright
+  - Full user journey
+  - Multiple receipts scenario
+
+Test Cases:
+  1. Simple case: 3 people, 3 items, equal split
+  2. Unequal consumption: 1 ate, 1 drank, 1 shared
+  3. Transport: gocar split 6 ways equally
+  4. Mixed: restaurant + transport, complex allocation
+  5. Edge: 1 person, 1 item (no split needed)
+  6. Large: 50 items, 10 people
+  7. OCR fail: manual entry fallback
+
+
+COMMON ISSUES & SOLUTIONS
+================================================================================
+
+Issue 1: OCR confidence low
+  Solution: Show manual edit option, allow user to fix
+
+Issue 2: Receipt date parsing fails
+  Solution: Let user set date manually
+
+Issue 3: Currency parsing (Rp vs others)
+  Solution: Detect from receipt or user preference
+
+Issue 4: Drag-drop not working on mobile
+  Solution: Implement tap-to-select alternative on mobile
+
+Issue 5: Settlement calculation wrong
+  Solution: Show detailed breakdown per person, user can verify
+
+Issue 6: Database connection timeout
+  Solution: Connection pooling, Railway handles auto-reconnect
+
+Issue 7: Claude API rate limit
+  Solution: Batch requests, cache results, show queue
+
+
+DEPLOYMENT CHECKLIST
+================================================================================
+
+Code Quality:
+  ☐ No console.logs in production code
+  ☐ Error handling on all API calls
+  ☐ Input validation (frontend + backend)
+  ☐ SQL injection prevention (use parameterized queries)
+  ☐ CORS properly configured
+
+Environment:
+  ☐ All secrets in .env (never hardcoded)
+  ☐ DATABASE_URL set on Railway
+  ☐ ANTHROPIC_API_KEY set on Railway
+  ☐ NODE_ENV=production
+
+Database:
+  ☐ Migrations run: npx prisma migrate deploy
+  ☐ Indexes on frequently queried columns
+  ☐ Backups enabled (Railway auto-handles)
+
+Frontend:
+  ☐ Build tested: npm run build
+  ☐ Build size reasonable (<500KB bundle)
+  ☐ Images optimized
+  ☐ Deployed to Vercel
+
+Backend:
+  ☐ Server starts: npm run start
+  ☐ Health check endpoint works
+  ☐ Deployed to Railway
+
+Monitoring:
+  ☐ Error logging setup
+  ☐ Database monitoring
+  ☐ API response time tracking
+  ☐ User session tracking
+
+Documentation:
+  ☐ README with setup instructions
+  ☐ API docs (Swagger/Postman)
+  ☐ Database schema documented
+  ☐ Architecture diagram
+
+
+PORTFOLIO WRITEUP
+================================================================================
+
+When done, create a blog post / portfolio page covering:
+
+1. Project Overview (2-3 sentences)
+   "Split Bill is a web app that automates expense splitting using AI-powered
+    OCR and drag-drop allocation, deployed with PostgreSQL + React."
+
+2. Problem Statement
+   "Group expenses are tedious to split manually, especially when items
+    vary (food vs drinks vs shared costs)."
+
+3. Solution
+   "Automated receipt scanning, AI-suggested allocation, interactive UI
+    for manual override, automatic settlement."
+
+4. Technical Stack
+   - Frontend: React + TailwindCSS (Vercel)
+   - Backend: Node.js + Express (Railway)
+   - Database: PostgreSQL (Railway)
+   - AI: Claude Vision + Claude API
+
+5. Key Features & Learnings
+   - OCR integration (Google Cloud Vision API - FREE tier)
+   - Item-first allocation form (smart UX)
+   - Settlement algorithm (SHARED vs INDIVIDUAL items)
+   - Cloud deployment (Railway/Vercel)
+   - Cost optimization (free tier usage strategy)
+
+6. Architecture Diagram
+   - User → React frontend → Express backend → PostgreSQL
+   - Google Cloud Vision API for OCR (free!)
+   - Item-first allocation (no drag-drop needed)
+   - Automatic settlement calculation
+
+7. Challenges & Solutions
+   - OCR handling different receipt formats (solved by Google Vision 95% accuracy)
+   - Ambiguous item allocation (solved by item-first form)
+   - Settlement algorithm with SHARED/INDIVIDUAL items
+   - Cost optimization (Google free tier)
+
+8. Results & Metrics
+   - Deployed to production (Vercel + Railway)
+   - Works with 10+ receipt types
+   - OCR accuracy: 95% (Google Vision)
+   - Allocation speed: 1-2 minutes per receipt (item-first form)
+   - Monthly cost: $0-2 for MVP! 🎉
+   - Response time <2s for OCR
+
+9. Future Improvements
+   - Mobile app (React Native)
+   - Payment integration (Midtrans)
+   - PaddleOCR fallback (V2+ cost optimization)
+   - Real-time collaboration (WebSocket)
+   - Analytics & reporting dashboard
+
+10. Source Code Link
+    - GitHub repo link
+    - Live demo link: splitbill.hilmi.dev
+    - Docker setup instructions
+
+
+ALLOCATION STRATEGY RATIONALE
+================================================================================
+
+Why Item-First (Not Person-First or Drag-Drop)?
+---------------------------------------
+
+Three possible approaches:
+
+A. PERSON-FIRST: "Adi, apa yang kamu makan?"
+   - Pro: Most intuitive for individual
+   - Con: Tedious (must ask 8 people individually)
+   - Time: ~2-3 minutes
+   - Use case: 2-3 people only
+
+B. ITEM-FIRST: "Ikan Matah siapa aja?" ⭐ CHOSEN
+   - Pro: Fast (1-2 min), natural group conversation
+   - Pro: Mirrors real-world (waiter asks per item)
+   - Pro: Group discusses together, less mistakes
+   - Pro: Handles all edge cases perfectly
+   - Time: ~1-2 minutes
+   - Use case: Any group size, any receipt type
+
+C. DRAG-DROP: Visual allocation UI
+   - Pro: Visually intuitive
+   - Con: Tedious for many items (drag 50+ times)
+   - Con: Mobile unfriendly
+   - Time: ~3-5 minutes
+   - Use case: UI showcase, but slow
+
+DECISION: Use Item-First (B) for MVP because:
+  ✓ Fastest method (1-2 min)
+  ✓ Natural conversation flow (group talks together)
+  ✓ Real-world behavior (how restaurants work)
+  ✓ Handles ambiguous items perfectly (multiple ikan varieties)
+  ✓ Simple implementation (forms + checkboxes)
+  ✓ 100% accurate (no guessing from AI)
+  ✓ Scalable (works for any group size)
+
+Future: Add drag-drop (V2) as visual alternative
+
+
+DATA MODEL DESIGN RATIONALE
+================================================================================
+
+Why Flexible Naming (No Fixed Groups)?
+---------------------------------------
+1. Real-world usage: Different people per split
+   - Monday: Split with Alice, Bob, Charlie (restaurant)
+   - Wednesday: Split with Diana, Eve, Frank (transport)
+   - Friday: Split with Alice, Henry (groceries)
+
+2. Zero friction: No registration required
+   - Just type names → immediate allocation
+   - No account setup overhead
+   - Perfect for one-time or casual splits
+
+3. Optional tracking: User can register later
+   - If Alice registers: her balance aggregated
+   - Past allocations linked to her account
+   - Still works without registration
+
+Database Benefits:
+  ✓ Simpler schema (no groups, no memberships)
+  ✓ Flexible (anyone can be in receipt)
+  ✓ Scalable (no complex FK relationships)
+  ✓ User registration is pure convenience layer
+
+Item Type Logic (SHARED vs INDIVIDUAL)
+--------------------------------------
+Why two types?
+
+SHARED Items:
+  - Pizza, entrees, shared dishes
+  - Price divided equally among who consumed it
+  - Formula: total_price / count(consumers)
+  - Example: Rp60k pizza / 3 people = Rp20k each
+
+INDIVIDUAL Items:
+  - Beverages, personal items, individual orders
+  - Each person pays unit_price × qty they got
+  - Formula: unit_price × quantity_allocated
+  - Example: Rp10k soda × 1 per person
+
+Real Example (Pizza Hut):
+  - Pizza (Rp60k, SHARED, 3 people): Rp20k each
+  - Soda (Rp30k, INDIVIDUAL, 3×Rp10k): Rp10k per soda
+  - Nugget (Rp30k, INDIVIDUAL, only Budi): Rp30k to Budi
+
+Payer Selection (Mandatory)
+---------------------------
+Why mandatory?
+
+Without payer, system doesn't know:
+  - Who should receive money
+  - Who owes whom
+  - How to calculate settlement
+
+With payer = receipt paid by Adi:
+  - Adi paid full amount (Rp120k)
+  - Adi consumed some items (Rp30k)
+  - Adi is owed difference (Rp90k)
+  - Others pay Adi according to their consumption
+
+Flow Example:
+  1. Upload receipt
+  2. Select payer: "Adi"
+  3. Extract items + select types
+  4. Allocate items to people
+  5. System calculates:
+     * Adi consumed: Rp30k
+     * Settlement: Others owe Adi Rp90k
+
+This design allows:
+  ✓ Any person can be payer (not just receipt owner)
+  ✓ Flexibility in group composition
+  ✓ Accurate settlement calculation
+
+
+QUICK START CHECKLIST
+================================================================================
+
+Day 1: Setup
+  ☐ Create Railway PostgreSQL
+  ☐ Create Vercel project
+  ☐ Clone/init repo
+  ☐ Setup .env files
+  ☐ Run migrations
+  ☐ Deploy skeleton
+
+Day 2-3: Payer Selection & Upload
+  ☐ Create receipt upload form UI
+  ☐ Add MANDATORY payer_name field
+  ☐ Optional: date, merchant fields
+  ☐ Test form validation
+
+Day 4-5: Google Vision OCR Integration
+  ☐ Setup Google Cloud project
+  ☐ Enable Vision API
+  ☐ Create API key (add to .env: GOOGLE_VISION_API_KEY)
+  ☐ Implement google.cloud.vision.ImageAnnotatorClient()
+  ☐ Parse TEXT_DETECTION response
+  ☐ Extract items (name, qty, price)
+  ☐ Store in receipt_items with item_type defaults
+  ☐ Show results for user review/correction
+  ☐ Fallback: Manual entry if OCR fails
+
+Day 6-7: Item Type Selection
+  ☐ Add type selector UI (SHARED/INDIVIDUAL)
+  ☐ Smart defaults (food→SHARED, drinks→INDIVIDUAL)
+  ☐ Allow manual override
+  ☐ Test with mixed receipts
+
+Day 8-10: Item-First Allocation Form (CORE FEATURE)
+  ☐ Build form-based allocation UI
+  ☐ For each item: "Siapa aja yang makan?"
+  ☐ Checkboxes for person selection
+  ☐ Summary screen before confirm
+  ☐ Validation logic
+  ☐ Test: simple + complex receipts
+  ☐ Test: ambiguous shared dishes (2 ikan, 8 orang)
+
+Day 11-12: Settlement Calculation
+  ☐ Implement settlement algorithm
+  ☐ Respect item_type in calculations
+  ☐ Validate totals match receipt
+  ☐ Create settlement records
+  ☐ UI for settlement summary
+
+Day 13: History & Dashboard
+  ☐ Dashboard + receipt history
+  ☐ Personal balance (if user registered)
+  ☐ Payment history
+
+Day 14-15: Polish & Deploy
+  ☐ Error handling + validation
+  ☐ Mobile responsive design
+  ☐ Edge case testing
+  ☐ Deploy to Railway + Vercel
+  ☐ Security check
+  ☐ Documentation
+
+Day 16+: Portfolio & V2 Planning
+  ☐ Write blog post (focus on item-first UX)
+  ☐ Create demo video
+  ☐ Update portfolio site
+  ☐ Plan V2: AI suggestions, drag-drop alternative, etc
+
+
+COST BREAKDOWN (MONTHLY - GOOGLE VISION FREE TIER)
+================================================================================
+
+Service              | MVP Cost  | Notes
+---------------------|-----------|---------------------
+Google Vision API    | $0        | FREE! 300 req/month (covers MVP)
+Railway PostgreSQL   | $0        | Within $5 free tier
+Railway Backend      | $0-2      | Within free tier + small buffer
+Vercel Frontend      | $0        | Free tier
+Domain               | $0        | Use subdomain (free)
+---------------------|-----------|---------------------
+TOTAL MVP            | $0-2      | SUPER CHEAP! 🎉
+
+Scaling (50+ users):
+---------------------|-----------|---------------------
+Google Vision API    | $1-3      | 1500 req/month = $0.60
+Railway             | $2-3      | More traffic
+Domain              | $0-1      | Optional custom domain
+---------------------|-----------|---------------------
+TOTAL               | $3-7      | Still affordable
+
+Scaling (200+ users):
+---------------------|-----------|---------------------
+Google Vision API    | $3-5      | 6000 req/month = $2.70
+Railway             | $5-8      | More traffic/storage
+Domain              | $1        | Custom domain
+---------------------|-----------|---------------------
+TOTAL               | $9-14     | Reasonable for scale
+
+Future (V2+ with PaddleOCR Hybrid):
+---------------------|-----------|---------------------
+Google Vision        | $1-2      | Only 50% of requests
+PaddleOCR (Railway)  | $2-3      | Compute cost
+Railway             | $3-5      | Less traffic via hybrid
+---------------------|-----------|---------------------
+TOTAL               | $6-10     | Optimized cost!
+
+Cost Comparison:
+  Claude Vision only:     $1-5 MVP → $18 scaled
+  PaddleOCR only:        $0.50 MVP → $5-8 scaled
+  Google Vision (chosen):  $0 MVP → $2.70 scaled ✅ BEST
+  Hybrid (V2):           $0 MVP → $6-10 scaled (optimized)
+
+For portfolio: Expect $0-10/month for full MVP lifecycle
+No payment required for first 2-3 months!
+
+
+RESOURCES & REFERENCES
+================================================================================
+
+Documentation:
+  - Railway: https://docs.railway.app
+  - Prisma: https://www.prisma.io/docs
+  - Claude API: https://docs.anthropic.com
+  - React Beautiful DND: https://github.com/atlassian/react-beautiful-dnd
+
+Similar Projects:
+  - Splitwise (reference)
+  - PayPal.me (settlement)
+  - Figma (drag-drop UI)
+
+Learning Resources:
+  - Claude API prompting guide
+  - PostgreSQL performance tips
+  - React drag-drop patterns
+
+
+SUPPORT & TROUBLESHOOTING
+================================================================================
+
+Issue: Claude API rate limit
+  Debug: Check /api/logs
+  Solution: Implement request queuing + caching
+
+Issue: Receipt image not processing
+  Debug: Check image format/size (max 5MB recommended)
+  Solution: Add image compression + format validation
+
+Issue: Drag-drop lag
+  Debug: Check item count + network
+  Solution: Virtualize list if 100+ items
+
+Issue: Database connection slow
+  Debug: Check Railway metrics
+  Solution: Add connection pooling (Prisma does auto)
+
+Contact:
+  - Railway support: https://railway.app/support
+  - Anthropic support: https://support.anthropic.com
+
+================================================================================
+END OF SPECIFICATION
+================================================================================

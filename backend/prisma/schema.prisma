@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// OPTIONAL - for account tracking only
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(100)
+  email     String?  @unique @db.VarChar(100)
+  phone     String?  @db.VarChar(20)
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  personLinks PersonToUser[]
+
+  @@map("users")
+}
+
+model Receipt {
+  id String @id @default(uuid()) @db.Uuid
+
+  uploadedBy String? @map("uploaded_by") @db.VarChar(100)
+  payerName  String  @map("payer_name") @db.VarChar(100)
+
+  receiptImageUrl String?   @map("receipt_image_url")
+  merchantName    String?   @map("merchant_name") @db.VarChar(100)
+  receiptDate     DateTime? @map("receipt_date")
+  totalAmount     Decimal   @map("total_amount") @db.Decimal(10, 2)
+  notes           String?
+
+  status String @default("pending") @db.VarChar(20) // pending | finalized | settled
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items       ReceiptItem[]
+  allocations ItemAllocation[]
+  settlements Settlement[]
+
+  @@map("receipts")
+}
+
+// item_type determines allocation calculation: SHARED or INDIVIDUAL
+model ReceiptItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  receiptId String  @map("receipt_id") @db.Uuid
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  name     String  @db.VarChar(100)
+  category String? @db.VarChar(50) // food | drink | transport | other
+
+  totalPrice Decimal @map("total_price") @db.Decimal(10, 2)
+  quantity   Int
+  unitPrice  Decimal? @map("unit_price") @db.Decimal(10, 2)
+
+  itemType String @map("item_type") @db.VarChar(20) // SHARED | INDIVIDUAL
+
+  orderIndex Int?     @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  allocations ItemAllocation[]
+
+  @@map("receipt_items")
+}
+
+// person_name is free text, no FK to users table (flexible naming)
+model ItemAllocation {
+  id        String      @id @default(uuid()) @db.Uuid
+  receiptId String      @map("receipt_id") @db.Uuid
+  receipt   Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  itemId    String      @map("item_id") @db.Uuid
+  item      ReceiptItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  personName String @map("person_name") @db.VarChar(100)
+
+  // SHARED: unused (always 1/null). INDIVIDUAL: qty consumed by this person.
+  quantityAllocated Decimal? @map("quantity_allocated") @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("item_allocations")
+}
+
+// Auto-calculated: who owes who
+model Settlement {
+  id        String  @id @default(uuid()) @db.Uuid
+  receiptId String  @map("receipt_id") @db.Uuid
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  payerName String @map("payer_name") @db.VarChar(100) // receives money
+  owerName  String @map("ower_name") @db.VarChar(100) // pays money
+
+  amount Decimal  @db.Decimal(10, 2)
+  status String   @default("pending") @db.VarChar(20) // pending | paid | cancelled
+  paidAt DateTime? @map("paid_at")
+  notes  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  payments Payment[]
+
+  @@map("settlements")
+}
+
+model Payment {
+  id           String     @id @default(uuid()) @db.Uuid
+  settlementId String?    @map("settlement_id") @db.Uuid
+  settlement   Settlement? @relation(fields: [settlementId], references: [id])
+
+  senderName   String? @map("sender_name") @db.VarChar(100)
+  receiverName String? @map("receiver_name") @db.VarChar(100)
+
+  amount        Decimal? @db.Decimal(10, 2)
+  paymentMethod String?  @map("payment_method") @db.VarChar(50) // manual | transfer | cash
+  proofUrl      String?  @map("proof_url")
+  paidAt        DateTime @default(now()) @map("paid_at")
+
+  @@map("payments")
+}
+
+// Links free-text person_name to a registered user account (optional)
+model PersonToUser {
+  id         String  @id @default(uuid()) @db.Uuid
+  personName String  @map("person_name") @db.VarChar(100)
+  userId     String? @map("user_id") @db.Uuid
+  user       User?   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("person_to_user")
+}
