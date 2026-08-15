@@ -110,6 +110,7 @@ receiptsRouter.post("/:id/settlements/calculate", async (req, res) => {
         amount: s.amount,
       })),
     }),
+    prisma.receipt.update({ where: { id: receipt.id }, data: { status: "finalized" } }),
   ]);
 
   const stored = await prisma.settlement.findMany({ where: { receiptId: receipt.id } });

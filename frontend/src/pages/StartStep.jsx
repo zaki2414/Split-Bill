@@ -9,6 +9,8 @@ export default function StartStep() {
   const [payerName, setPayerName] = useState("");
   const [people, setPeople] = useState([]);
   const [personDraft, setPersonDraft] = useState("");
+  const [createdReceiptId, setCreatedReceiptId] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
 
   const setReceipt = useSplitStore((s) => s.setReceipt);
   const setStep = useSplitStore((s) => s.setStep);
@@ -17,8 +19,21 @@ export default function StartStep() {
     mutationFn: (payload) => api.post("/api/receipts", payload).then((res) => res.data),
     onSuccess: (receipt) => {
       setReceipt(receipt);
-      setStep("items");
+      setCreatedReceiptId(receipt.id);
     },
+  });
+
+  const uploadImage = useMutation({
+    mutationFn: (file) => {
+      const formData = new FormData();
+      formData.append("image", file);
+      return api
+        .post(`/api/receipts/${createdReceiptId}/image`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+        .then((res) => res.data);
+    },
+    onSuccess: () => setStep("items"),
   });
 
   const addPerson = () => {
@@ -46,6 +61,47 @@ export default function StartStep() {
       people,
     });
   };
+
+  if (createdReceiptId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-700">Foto struk (opsional)</label>
+          <p className="mt-1 text-xs text-slate-400">
+            Foto akan dikompres otomatis sebelum disimpan.
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+            className="mt-2 block w-full text-sm text-slate-700"
+          />
+        </div>
+
+        {uploadImage.isError && (
+          <p className="text-sm text-red-500">Gagal upload foto. Coba lagi atau lewati.</p>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setStep("items")}
+            className="flex-1 rounded-md border border-slate-300 py-2.5 text-sm font-medium text-slate-700"
+          >
+            Lewati
+          </button>
+          <button
+            type="button"
+            onClick={() => (imageFile ? uploadImage.mutate(imageFile) : setStep("items"))}
+            disabled={uploadImage.isPending}
+            className="flex-1 rounded-md bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {uploadImage.isPending ? "Mengupload..." : "Lanjut ke items"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -142,7 +198,7 @@ export default function StartStep() {
         disabled={!canSubmit || createReceipt.isPending}
         className="w-full rounded-md bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
       >
-        {createReceipt.isPending ? "Membuat..." : "Lanjut ke items"}
+        {createReceipt.isPending ? "Membuat..." : "Lanjut"}
       </button>
     </form>
   );

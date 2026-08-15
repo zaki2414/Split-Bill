@@ -25,5 +25,12 @@ settlementsRouter.post("/:id/pay", async (req, res) => {
     },
   });
 
+  const siblings = await prisma.settlement.findMany({ where: { receiptId: settlement.receiptId } });
+  const allPaid = siblings.length > 0 && siblings.every((s) => s.status === "paid");
+  await prisma.receipt.update({
+    where: { id: settlement.receiptId },
+    data: { status: allPaid ? "settled" : "finalized" },
+  });
+
   res.json(settlement);
 });

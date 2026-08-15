@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useSplitStore } from "./store/splitStore";
 import StartStep from "./pages/StartStep";
 import ItemsStep from "./pages/ItemsStep";
 import AllocateStep from "./pages/AllocateStep";
 import SummaryStep from "./pages/SummaryStep";
 import ReportStep from "./pages/ReportStep";
+import HistoryPage from "./pages/HistoryPage";
 
 const STEPS = [
   { key: "start", label: "Mulai" },
@@ -21,17 +23,13 @@ const STEP_COMPONENTS = {
   report: ReportStep,
 };
 
-function App() {
+function WizardScreen() {
   const step = useSplitStore((s) => s.step);
-  const title = useSplitStore((s) => s.title);
   const currentIndex = STEPS.findIndex((s) => s.key === step);
   const StepComponent = STEP_COMPONENTS[step];
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-10">
-      <h1 className="text-2xl font-semibold text-slate-900">Split Bill</h1>
-      {title && <p className="mt-1 text-sm text-slate-500">{title}</p>}
-
+    <>
       <ol className="mt-6 flex items-center gap-2">
         {STEPS.map((s, i) => (
           <li key={s.key} className="flex items-center gap-2">
@@ -53,6 +51,44 @@ function App() {
       <div className="mt-8">
         <StepComponent />
       </div>
+    </>
+  );
+}
+
+function App() {
+  const [screen, setScreen] = useState("wizard");
+  const title = useSplitStore((s) => s.title);
+
+  return (
+    <div className="mx-auto max-w-xl px-4 py-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Split Bill</h1>
+          {screen === "wizard" && title && <p className="mt-1 text-sm text-slate-500">{title}</p>}
+        </div>
+        <nav className="flex gap-1 rounded-md bg-slate-100 p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setScreen("wizard")}
+            className={`rounded px-3 py-1.5 font-medium ${
+              screen === "wizard" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            Split
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen("history")}
+            className={`rounded px-3 py-1.5 font-medium ${
+              screen === "history" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            Riwayat
+          </button>
+        </nav>
+      </div>
+
+      {screen === "wizard" ? <WizardScreen /> : <div className="mt-8"><HistoryPage /></div>}
     </div>
   );
 }
