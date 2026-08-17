@@ -11,7 +11,7 @@ export default function Navbar({ onStart }) {
         <button
           type="button"
           onClick={onStart}
-          className="cursor-pointer rounded-full bg-olive px-5 py-2.5 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98]"
+          className="cursor-pointer rounded-full bg-olive px-5 py-2.5 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition hover:bg-olive/80 active:scale-[0.98]"
         >
           Mulai
         </button>

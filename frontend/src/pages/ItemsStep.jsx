@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
 import { CATEGORY_LABEL, ITEM_TYPE_LABEL } from "../lib/labels";
 import PhotoUpload from "../components/PhotoUpload";
+import { BTN_ICON, BTN_LINK, BTN_PRIMARY, BTN_SECONDARY } from "../lib/buttonStyles";
 
 const CATEGORY_ICON = {
   food: Utensils,
@@ -39,15 +40,11 @@ const formatRupiah = (n) =>
 const LABEL = "block text-sm font-bold text-olive-dark";
 const INPUT =
   "mt-1 w-full rounded-2xl border-2 border-olive-light bg-white px-4 py-2.5 text-sm font-medium text-olive-darker placeholder:text-olive-dark/30 focus:border-olive focus:outline-none focus:ring-4 focus:ring-olive/20";
-const BTN_PRIMARY =
-  "cursor-pointer rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none hover:bg-olive/80";
-const BTN_SECONDARY =
-  "cursor-pointer rounded-full border-2 border-olive-light bg-white px-6 py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98]";
 
 const EMPTY_FORM = {
   name: "",
   category: "food",
-  totalPrice: "",
+  unitPrice: "",
   quantity: "1",
 };
 
@@ -60,7 +57,7 @@ export default function ItemsStep() {
   const [editingItemId, setEditingItemId] = useState(null);
   const [name, setName] = useState(EMPTY_FORM.name);
   const [category, setCategory] = useState(EMPTY_FORM.category);
-  const [totalPrice, setTotalPrice] = useState(EMPTY_FORM.totalPrice);
+  const [unitPrice, setUnitPrice] = useState(EMPTY_FORM.unitPrice);
   const [quantity, setQuantity] = useState(EMPTY_FORM.quantity);
   const [itemType, setItemType] = useState(CATEGORY_DEFAULT_TYPE.food);
   const [typeTouched, setTypeTouched] = useState(false);
@@ -75,7 +72,7 @@ export default function ItemsStep() {
 
   const resetForm = () => {
     setName(EMPTY_FORM.name);
-    setTotalPrice(EMPTY_FORM.totalPrice);
+    setUnitPrice(EMPTY_FORM.unitPrice);
     setQuantity(EMPTY_FORM.quantity);
     setCategory(EMPTY_FORM.category);
     setTypeTouched(false);
@@ -123,7 +120,7 @@ export default function ItemsStep() {
     setEditingItemId(item.id);
     setName(item.name);
     setCategory(item.category || "food");
-    setTotalPrice(String(item.totalPrice));
+    setUnitPrice(String(item.unitPrice ?? Number(item.totalPrice) / item.quantity));
     setQuantity(String(item.quantity));
     setItemType(item.itemType);
     setTypeTouched(true);
@@ -132,12 +129,13 @@ export default function ItemsStep() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!name || !totalPrice || !quantity) return;
+    if (!name || !unitPrice || !quantity) return;
     const payload = {
       name,
       category,
-      totalPrice: Number(totalPrice),
+      unitPrice: Number(unitPrice),
       quantity: Number(quantity),
+      totalPrice: Number(unitPrice) * Number(quantity),
       itemType,
     };
     if (editingItemId) updateItem.mutate(payload);
@@ -180,7 +178,7 @@ export default function ItemsStep() {
               <button
                 type="button"
                 onClick={() => setShowPhotoUpload(true)}
-                className="flex cursor-pointer items-center gap-1 text-xs font-extrabold text-olive underline decoration-olive-light decoration-2 underline-offset-2"
+                className={`flex items-center gap-1 text-xs ${BTN_LINK}`}
               >
                 <Camera className="h-3.5 w-3.5" strokeWidth={2.5} />
                 Upload / Ganti Foto Struk
@@ -211,7 +209,7 @@ export default function ItemsStep() {
                     onClick={() => handleCategoryChange(value)}
                     aria-pressed={selected}
                     className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-2 p-3 text-center transition ${
-                      selected ? "border-olive bg-olive/10" : "border-olive-light bg-white hover:bg-cream"
+                      selected ? "border-olive bg-olive/10 hover:bg-olive/20" : "border-olive-light bg-white hover:bg-cream"
                     }`}
                   >
                     <Icon
@@ -241,7 +239,7 @@ export default function ItemsStep() {
                     }}
                     aria-pressed={selected}
                     className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-2 p-3 text-center transition ${
-                      selected ? "border-olive bg-olive/10" : "border-olive-light bg-white hover:bg-cream"
+                      selected ? "border-olive bg-olive/10 hover:bg-olive/20" : "border-olive-light bg-white hover:bg-cream"
                     }`}
                   >
                     <Icon
@@ -257,13 +255,13 @@ export default function ItemsStep() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={LABEL}>Harga Total (Rp)</label>
+              <label className={LABEL}>Harga Satuan (Rp)</label>
               <input
                 type="number"
                 min="0"
-                value={totalPrice}
-                onChange={(e) => setTotalPrice(e.target.value)}
-                placeholder="60000"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                placeholder="25000"
                 className={INPUT}
               />
             </div>
@@ -279,9 +277,10 @@ export default function ItemsStep() {
             </div>
           </div>
 
-          {name && totalPrice && (
+          {name && unitPrice && (
             <p className="rounded-2xl bg-cream px-4 py-2.5 text-xs font-bold text-olive-dark">
-              "{name}" ({formatRupiah(totalPrice)}) {PREVIEW_TEXT[itemType]}.
+              "{name}" ({formatRupiah(unitPrice)} × {quantity || 1} ={" "}
+              {formatRupiah(Number(unitPrice) * Number(quantity || 1))}) {PREVIEW_TEXT[itemType]}.
             </p>
           )}
 
@@ -321,33 +320,35 @@ export default function ItemsStep() {
           {items.map((item) => (
             <li
               key={item.id}
-              className={`flex items-center justify-between px-5 py-3.5 text-sm transition ${
+              className={`flex items-center justify-between gap-3 px-5 py-3.5 text-sm transition ${
                 item.id === editingItemId ? "bg-olive/10" : ""
               }`}
             >
-              <div>
-                <span className="font-bold text-olive-darker">{item.name}</span>
-                <span className="ml-2 rounded-full bg-olive-light/50 px-2 py-0.5 text-xs font-bold text-olive-darker">
-                  {ITEM_TYPE_LABEL[item.itemType] || item.itemType}
-                </span>
-                <span className="ml-2 font-medium text-olive-dark/50">
-                  ×{item.quantity}
-                </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="truncate font-bold text-olive-darker">{item.name}</span>
+                  <span className="shrink-0 rounded-full bg-olive-light/50 px-2 py-0.5 text-xs font-bold whitespace-nowrap text-olive-darker">
+                    {ITEM_TYPE_LABEL[item.itemType] || item.itemType}
+                  </span>
+                  <span className="shrink-0 font-medium whitespace-nowrap text-olive-dark/50">
+                    ×{item.quantity}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
                 <span className="font-extrabold text-olive-dark">
                   {formatRupiah(item.totalPrice)}
                 </span>
                 <button
                   onClick={() => startEdit(item)}
-                  className="cursor-pointer text-olive-dark/40 hover:text-olive"
+                  className={`${BTN_ICON} h-7 w-7 text-olive-dark/40 hover:bg-cream hover:text-olive`}
                   aria-label={`Edit ${item.name}`}
                 >
                   <Pencil className="h-4 w-4" strokeWidth={2.5} />
                 </button>
                 <button
                   onClick={() => deleteItem.mutate(item.id)}
-                  className="cursor-pointer text-olive-dark/40 hover:text-coral"
+                  className={`${BTN_ICON} h-7 w-7 text-lg text-olive-dark/40 hover:bg-cream hover:text-coral`}
                   aria-label={`Hapus ${item.name}`}
                 >
                   ×

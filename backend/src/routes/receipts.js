@@ -56,12 +56,20 @@ receiptsRouter.put("/:id", async (req, res) => {
     return res.status(404).json({ error: "Receipt not found" });
   }
 
-  const { title, payerName, merchantName, totalAmount, taxAmount, notes, people } = req.body;
+  const { title, payerName, merchantName, receiptDate, totalAmount, taxAmount, notes, people } = req.body;
 
   const ops = [
     prisma.receipt.update({
       where: { id: req.params.id },
-      data: { title, payerName, merchantName, totalAmount, taxAmount, notes },
+      data: {
+        title,
+        payerName,
+        merchantName,
+        receiptDate: receiptDate ? new Date(receiptDate) : undefined,
+        totalAmount,
+        taxAmount,
+        notes,
+      },
     }),
   ];
 
@@ -174,14 +182,17 @@ receiptsRouter.post("/:id/settlements/calculate", async (req, res) => {
 receiptsRouter.get("/:id/report", async (req, res) => {
   const receipt = await prisma.receipt.findFirst({
     where: { id: req.params.id, userId: req.userId },
-    include: { settlements: { orderBy: { createdAt: "asc" } } },
+    include: {
+      settlements: { orderBy: { createdAt: "asc" } },
+      allocations: { include: { item: true } },
+    },
   });
 
   if (!receipt) {
     return res.status(404).json({ error: "Receipt not found" });
   }
 
-  const { text, lines } = formatSettlementReport(receipt, receipt.settlements);
+  const { text, lines } = formatSettlementReport(receipt, receipt.settlements, receipt.allocations);
 
   res.json({ text, lines });
 });

@@ -78,9 +78,9 @@ export default function SettlementReport({ receiptId }) {
           {settlements.map((s) => (
             <li
               key={s.id}
-              className="flex items-center justify-between px-5 py-4 text-sm"
+              className="flex items-center justify-between gap-3 px-5 py-4 text-sm"
             >
-              <div>
+              <div className="min-w-0 flex-1">
                 <span className="font-bold text-olive-darker">
                   {s.owerName} → {s.payerName}
                 </span>
@@ -89,7 +89,7 @@ export default function SettlementReport({ receiptId }) {
                 </p>
               </div>
               {s.status === "paid" ? (
-                <span className="flex items-center gap-1 rounded-full bg-olive-light/50 px-3 py-1.5 text-xs font-extrabold text-olive-darker">
+                <span className="flex shrink-0 items-center gap-1 rounded-full bg-olive-light/50 px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-olive-darker">
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
                   Lunas
                 </span>
@@ -97,7 +97,7 @@ export default function SettlementReport({ receiptId }) {
                 <button
                   onClick={() => markPaid.mutate(s.id)}
                   disabled={markPaid.isPending}
-                  className="cursor-pointer rounded-full bg-olive px-4 py-2 text-xs font-extrabold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-40"
+                  className="shrink-0 cursor-pointer rounded-full bg-olive px-4 py-2 text-xs font-extrabold whitespace-nowrap text-white shadow-sm transition hover:bg-olive/80 active:scale-[0.98] disabled:opacity-40"
                 >
                   Tandai Lunas
                 </button>

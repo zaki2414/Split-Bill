@@ -13,7 +13,7 @@ export default function ReportStep() {
       <button
         type="button"
         onClick={reset}
-        className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-olive-light bg-white py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98]"
+        className="cursor-pointer flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-olive-light bg-white py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98]"
       >
         <RotateCcw className="h-4 w-4" strokeWidth={2.5} />
         Mulai BagiRata Baru

@@ -4,13 +4,9 @@ import { Check, Minus, Plus, Users } from "lucide-react";
 import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
 import { ITEM_TYPE_LABEL } from "../lib/labels";
+import { BTN_ICON, BTN_LINK, BTN_PRIMARY, BTN_SECONDARY } from "../lib/buttonStyles";
 
 const formatRupiah = (n) => `Rp${Math.round(Number(n)).toLocaleString("id-ID")}`;
-
-const BTN_PRIMARY =
-  "cursor-pointer rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none";
-const BTN_SECONDARY =
-  "cursor-pointer rounded-full border-2 border-olive-light bg-white px-6 py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98] disabled:opacity-40";
 
 export default function AllocateStep() {
   const receiptId = useSplitStore((s) => s.receiptId);
@@ -143,11 +139,7 @@ export default function AllocateStep() {
             <Users className="h-4 w-4" strokeWidth={2.5} />
             Siapa yang memesan item ini?
           </p>
-          <button
-            type="button"
-            onClick={toggleSelectAll}
-            className="cursor-pointer text-xs font-extrabold text-olive underline decoration-olive-light decoration-2 underline-offset-2"
-          >
+          <button type="button" onClick={toggleSelectAll} className={`text-xs ${BTN_LINK}`}>
             {allSelected ? "Batalkan Semua" : "Pilih Semua"}
           </button>
         </div>
@@ -163,7 +155,11 @@ export default function AllocateStep() {
               <div
                 key={personName}
                 className={`rounded-2xl border-2 p-3 text-center transition ${
-                  selected ? "border-olive bg-olive/10" : locked ? "border-olive-light/40 bg-cream/50" : "border-olive-light bg-white"
+                  selected
+                    ? "border-olive bg-olive/10 hover:bg-olive/20"
+                    : locked
+                      ? "border-olive-light/40 bg-cream/50"
+                      : "border-olive-light bg-white hover:bg-cream"
                 }`}
               >
                 <button
@@ -191,7 +187,7 @@ export default function AllocateStep() {
                     <button
                       type="button"
                       onClick={() => adjustQuantity(item.id, personName, -1)}
-                      className="cursor-pointer flex h-6 w-6 items-center justify-center rounded-full bg-olive-light/60 text-olive-darker active:scale-[0.9]"
+                      className={`${BTN_ICON} h-6 w-6 bg-olive-light/60 text-olive-darker hover:bg-olive-light active:scale-[0.9]`}
                       aria-label={`Kurangi jumlah untuk ${personName}`}
                     >
                       <Minus className="h-3 w-3" strokeWidth={3} />
@@ -201,7 +197,7 @@ export default function AllocateStep() {
                       type="button"
                       onClick={() => adjustQuantity(item.id, personName, 1)}
                       disabled={remainingStock <= 0}
-                      className="cursor-pointer flex h-6 w-6 items-center justify-center rounded-full bg-olive-light/60 text-olive-darker active:scale-[0.9] disabled:opacity-30"
+                      className={`${BTN_ICON} h-6 w-6 bg-olive-light/60 text-olive-darker hover:bg-olive-light active:scale-[0.9] disabled:opacity-30`}
                       aria-label={`Tambah jumlah untuk ${personName}`}
                     >
                       <Plus className="h-3 w-3" strokeWidth={3} />

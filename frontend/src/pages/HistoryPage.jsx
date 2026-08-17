@@ -68,7 +68,7 @@ export default function HistoryPage() {
                         type="button"
                         onClick={() => setSelectedId(r.id)}
                         className={`flex w-full cursor-pointer items-center justify-between px-5 py-4 text-left text-sm transition ${
-                          isActive ? "bg-olive/10" : "hover:bg-cream/60"
+                          isActive ? "bg-olive/10 hover:bg-olive/15" : "hover:bg-cream/60"
                         }`}
                       >
                         <div className="min-w-0">
@@ -76,7 +76,7 @@ export default function HistoryPage() {
                             {r.title || r.merchantName || "BagiRata"}
                           </p>
                           <p className="truncate font-medium text-olive-dark/60">
-                            Dibayar oleh {r.payerName} · {formatDate(r.createdAt)}
+                            Dibayar oleh {r.payerName} · {formatDate(r.receiptDate || r.createdAt)}
                           </p>
                         </div>
                         <div className="ml-3 shrink-0 text-right">
@@ -111,7 +111,7 @@ export default function HistoryPage() {
                     type="button"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="cursor-pointer flex cursor-pointer items-center gap-1 rounded-full border-2 border-olive-light bg-white px-3 py-1.5 text-xs font-extrabold text-olive-dark transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-30"
+                    className="flex cursor-pointer items-center gap-1 rounded-full border-2 border-olive-light bg-white px-3 py-1.5 text-xs font-extrabold text-olive-dark transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     Selanjutnya
                     <ChevronRight className="h-3.5 w-3.5" strokeWidth={3} />

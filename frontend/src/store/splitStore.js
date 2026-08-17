@@ -4,6 +4,7 @@ export const useSplitStore = create((set) => ({
   step: "start", // start | items | allocate | summary | report
   receiptId: null,
   title: "",
+  receiptDate: "",
   payerName: "",
   totalAmount: 0,
   taxAmount: 0,
@@ -14,6 +15,7 @@ export const useSplitStore = create((set) => ({
     set({
       receiptId: receipt.id,
       title: receipt.title,
+      receiptDate: receipt.receiptDate ? receipt.receiptDate.slice(0, 10) : "",
       payerName: receipt.payerName,
       totalAmount: Number(receipt.totalAmount),
       taxAmount: Number(receipt.taxAmount || 0),
@@ -26,6 +28,7 @@ export const useSplitStore = create((set) => ({
       step: "start",
       receiptId: null,
       title: "",
+      receiptDate: "",
       payerName: "",
       totalAmount: 0,
       taxAmount: 0,

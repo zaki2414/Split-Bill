@@ -3,16 +3,18 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
 import PhotoUpload from "../components/PhotoUpload";
+import { BTN_PRIMARY } from "../lib/buttonStyles";
 
 const LABEL = "block text-sm font-bold text-olive-dark";
 const INPUT =
   "mt-1 w-full rounded-2xl border-2 border-olive-light bg-white px-4 py-2.5 text-sm font-medium text-olive-darker placeholder:text-olive-dark/30 focus:border-olive focus:outline-none focus:ring-4 focus:ring-olive/20";
-const BTN_PRIMARY =
-  "rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none hover:bg-olive/80";
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function StartStep() {
   const receiptId = useSplitStore((s) => s.receiptId);
   const storedTitle = useSplitStore((s) => s.title);
+  const storedReceiptDate = useSplitStore((s) => s.receiptDate);
   const storedPayerName = useSplitStore((s) => s.payerName);
   const storedPeople = useSplitStore((s) => s.people);
   const setReceipt = useSplitStore((s) => s.setReceipt);
@@ -20,6 +22,7 @@ export default function StartStep() {
   const isEditing = !!receiptId;
 
   const [title, setTitle] = useState(storedTitle || "");
+  const [receiptDate, setReceiptDate] = useState(storedReceiptDate || today());
   const [payerName, setPayerName] = useState(storedPayerName || "");
   const [people, setPeople] = useState(storedPeople || []);
   const [personDraft, setPersonDraft] = useState("");
@@ -56,6 +59,7 @@ export default function StartStep() {
     if (!canSubmit) return;
     saveReceipt.mutate({
       title,
+      receiptDate,
       payerName,
       people,
     });
@@ -84,6 +88,17 @@ export default function StartStep() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Makan Malam Pizza Hut"
+          className={INPUT}
+        />
+      </div>
+
+      <div>
+        <label className={LABEL}>Tanggal Nota</label>
+        <input
+          type="date"
+          value={receiptDate}
+          onChange={(e) => setReceiptDate(e.target.value)}
+          max={today()}
           className={INPUT}
         />
       </div>

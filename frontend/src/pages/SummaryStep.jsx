@@ -3,13 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
+import { BTN_LINK, BTN_PRIMARY, BTN_PRIMARY_DARK } from "../lib/buttonStyles";
 
 const LABEL = "block text-sm font-bold text-olive-dark";
 const HINT = "mt-1 text-xs font-medium text-olive-dark/60";
 const INPUT =
   "mt-1 w-full rounded-2xl border-2 border-olive-light bg-white px-4 py-2.5 text-sm font-medium text-olive-darker placeholder:text-olive-dark/30 focus:border-olive focus:outline-none focus:ring-4 focus:ring-olive/20";
-const BTN_PRIMARY =
-  "rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none";
 
 const formatRupiah = (n) => `Rp${Math.round(Number(n) || 0).toLocaleString("id-ID")}`;
 
@@ -145,11 +144,7 @@ export default function SummaryStep() {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setStep("allocate")}
-        className="cursor-pointer flex items-center gap-1 text-sm font-bold text-olive-dark underline decoration-olive-light decoration-2 underline-offset-2"
-      >
+      <button type="button" onClick={() => setStep("allocate")} className={`flex items-center gap-1 text-sm ${BTN_LINK}`}>
         <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
         Kembali ke Alokasi
       </button>
@@ -185,7 +180,7 @@ export default function SummaryStep() {
         <button
           type="button"
           onClick={() => setStep("report")}
-          className="cursor-pointer flex w-full items-center justify-center gap-1.5 rounded-full bg-olive-dark px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive-dark/30 transition active:scale-[0.98]"
+          className={`flex w-full items-center justify-center gap-1.5 ${BTN_PRIMARY_DARK}`}
         >
           Lanjutkan ke Laporan
           <ArrowRight className="h-4 w-4" strokeWidth={2.5} />

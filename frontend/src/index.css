@@ -28,3 +28,47 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* react-image-crop theming - swap its default blue for the app's olive palette */
+.ReactCrop {
+  --rc-border-color: #eff5d2cc;
+  --rc-focus-color: #8fa31e;
+  --rc-drag-handle-bg-colour: #556b2f;
+}
+
+/* CropTutorial: a looping demo of dragging a crop box's corner handle to resize it */
+@keyframes crop-tutorial-box {
+  0%,
+  15% {
+    width: 52px;
+    height: 34px;
+  }
+  50%,
+  65% {
+    width: 66px;
+    height: 44px;
+  }
+  100% {
+    width: 52px;
+    height: 34px;
+  }
+}
+@keyframes crop-tutorial-handle {
+  0%,
+  15% {
+    transform: translate(0, 0);
+  }
+  50%,
+  65% {
+    transform: translate(14px, 10px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+.crop-tutorial-box {
+  animation: crop-tutorial-box 2.6s ease-in-out infinite;
+}
+.crop-tutorial-handle {
+  animation: crop-tutorial-handle 2.6s ease-in-out infinite;
+}

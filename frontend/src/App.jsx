@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, LogOut, Wallet } from "lucide-react";
 import { useSplitStore } from "./store/splitStore";
 import { useAuthStore } from "./store/authStore";
+import { BTN_ICON } from "./lib/buttonStyles";
 import StartStep from "./pages/StartStep";
 import ItemsStep from "./pages/ItemsStep";
 import AllocateStep from "./pages/AllocateStep";
@@ -117,7 +118,7 @@ function UserBadge({ onLogout }) {
         type="button"
         onClick={onLogout}
         aria-label="Keluar"
-        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-olive-dark/50 hover:bg-cream hover:text-coral"
+        className={`${BTN_ICON} h-7 w-7 text-olive-dark/50 hover:bg-cream hover:text-coral`}
       >
         <LogOut className="h-4 w-4" strokeWidth={2.5} />
       </button>
@@ -154,14 +155,14 @@ function App() {
           screen === "history" ? "max-w-4xl" : "max-w-xl"
         }`}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div>
             <button
               type="button"
               onClick={() => setScreen("landing")}
-              className="cursor-pointer flex items-center gap-2 text-3xl font-extrabold tracking-tight text-olive-darker"
+              className="cursor-pointer flex items-center gap-2 text-2xl font-extrabold tracking-tight text-olive-darker transition-colors hover:text-olive sm:text-3xl"
             >
-              <Wallet className="h-7 w-7 text-olive" strokeWidth={2.5} />
+              <Wallet className="h-6 w-6 text-olive sm:h-7 sm:w-7" strokeWidth={2.5} />
               BagiRata
             </button>
             {screen === "wizard" && title && (
@@ -177,7 +178,7 @@ function App() {
                   onClick={() => setScreen(item.key)}
                   className={`cursor-pointer rounded-full px-4 py-1.5 font-bold transition-colors ${
                     screen === item.key
-                      ? "bg-olive text-white shadow-sm"
+                      ? "bg-olive text-white shadow-sm hover:bg-olive-dark"
                       : "text-olive-dark hover:bg-cream"
                   }`}
                 >

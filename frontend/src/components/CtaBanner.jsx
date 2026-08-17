@@ -12,7 +12,7 @@ export default function CtaBanner({ onStart }) {
       <button
         type="button"
         onClick={onStart}
-        className="mx-auto mt-7 flex cursor-pointer items-center justify-center gap-2 rounded-full bg-olive px-8 py-4 text-base font-extrabold text-white shadow-lg shadow-black/20 transition active:scale-[0.98]"
+        className="mx-auto mt-7 flex cursor-pointer items-center justify-center gap-2 rounded-full bg-olive px-8 py-4 text-base font-extrabold text-white shadow-lg shadow-black/20 transition hover:bg-olive/80 active:scale-[0.98]"
       >
         Mulai BagiRata
         <ArrowRight className="h-5 w-5" strokeWidth={2.5} />
