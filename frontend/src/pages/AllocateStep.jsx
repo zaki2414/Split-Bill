@@ -1,32 +1,76 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Minus, Plus, Users } from "lucide-react";
 import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
+import { ITEM_TYPE_LABEL } from "../lib/labels";
 
 const formatRupiah = (n) => `Rp${Math.round(Number(n)).toLocaleString("id-ID")}`;
+
+const BTN_PRIMARY =
+  "cursor-pointer rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none";
+const BTN_SECONDARY =
+  "cursor-pointer rounded-full border-2 border-olive-light bg-white px-6 py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98] disabled:opacity-40";
 
 export default function AllocateStep() {
   const receiptId = useSplitStore((s) => s.receiptId);
   const people = useSplitStore((s) => s.people);
   const setStep = useSplitStore((s) => s.setStep);
+  const queryClient = useQueryClient();
 
   const formQuery = useQuery({
     queryKey: ["allocation-form", receiptId],
     queryFn: () => api.get(`/api/receipts/${receiptId}/allocation-form`).then((res) => res.data),
     enabled: !!receiptId,
+    staleTime: 0,
+    refetchOnMount: "always", // always get the latest saved allocations, never a stale cached copy
   });
 
   const [index, setIndex] = useState(0);
-  const [selections, setSelections] = useState({}); // itemId -> Set(personName)
+  const [selections, setSelections] = useState({}); // itemId -> { personName: quantity }
+
+  // Pre-fill from any allocations already saved for this receipt (e.g. user navigated
+  // back to this step), so re-visiting doesn't wipe out prior work. Waits for the network
+  // fetch to actually settle before locking in - otherwise a stale cached response (from
+  // before the allocations were saved) could win the race and initialize as empty.
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (initialized.current || !formQuery.isSuccess || formQuery.isFetching) return;
+    const grouped = {};
+    for (const a of formQuery.data.existing_allocations || []) {
+      if (!grouped[a.item_id]) grouped[a.item_id] = {};
+      grouped[a.item_id][a.person_name] = a.quantity;
+    }
+    // Transport is a flat cost shared by the whole group - if nobody has allocated it
+    // yet, default to everyone selected instead of making the user tick every box.
+    for (const it of formQuery.data.items || []) {
+      if (it.category === "transport" && !grouped[it.id]) {
+        grouped[it.id] = {};
+        for (const p of formQuery.data.people || []) grouped[it.id][p] = 1;
+      }
+    }
+    setSelections(grouped);
+    initialized.current = true;
+  }, [formQuery.data, formQuery.isFetching, formQuery.isSuccess]);
 
   const items = formQuery.data?.items || [];
   const item = items[index];
 
   const togglePerson = (itemId, personName) => {
     setSelections((prev) => {
-      const current = new Set(prev[itemId] || []);
-      if (current.has(personName)) current.delete(personName);
-      else current.add(personName);
+      const current = { ...(prev[itemId] || {}) };
+      if (personName in current) delete current[personName];
+      else current[personName] = 1;
+      return { ...prev, [itemId]: current };
+    });
+  };
+
+  const adjustQuantity = (itemId, personName, delta) => {
+    setSelections((prev) => {
+      const current = { ...(prev[itemId] || {}) };
+      const nextQty = (current[personName] || 0) + delta;
+      if (nextQty <= 0) delete current[personName];
+      else current[personName] = nextQty;
       return { ...prev, [itemId]: current };
     });
   };
@@ -38,61 +82,151 @@ export default function AllocateStep() {
           receipt_id: receiptId,
           allocations: items.map((it) => ({
             item_id: it.id,
-            person_names: [...(selections[it.id] || [])],
+            people: Object.entries(selections[it.id] || {}).map(([person_name, quantity]) => ({
+              person_name,
+              quantity,
+            })),
           })),
         })
         .then((res) => res.data),
-    onSuccess: () => setStep("summary"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allocation-form", receiptId] });
+      setStep("summary");
+    },
   });
 
-  if (formQuery.isLoading) return <p className="text-sm text-slate-400">Memuat...</p>;
-  if (!item) return <p className="text-sm text-slate-400">Tidak ada item.</p>;
+  if (formQuery.isLoading) return <p className="text-sm font-medium text-olive-dark/60">Memuat...</p>;
+  if (!item) return <p className="text-sm font-medium text-olive-dark/60">Tidak ada item yang tersedia.</p>;
 
   const isLast = index === items.length - 1;
-  const currentSelection = selections[item.id] || new Set();
+  const isIndividual = item.type === "INDIVIDUAL";
+  const currentSelection = selections[item.id] || {};
+  const totalAllocatedQty = Object.values(currentSelection).reduce((sum, q) => sum + q, 0);
+  const remainingStock = item.quantity - totalAllocatedQty;
+  const allSelected = people.length > 0 && people.every((p) => p in currentSelection);
+
+  const toggleSelectAll = () => {
+    setSelections((prev) => {
+      if (allSelected) return { ...prev, [item.id]: {} };
+      if (!isIndividual) {
+        const all = {};
+        for (const p of people) all[p] = 1;
+        return { ...prev, [item.id]: all };
+      }
+      // INDIVIDUAL: fill greedily, 1 each, until the item's quantity runs out
+      const all = {};
+      let remaining = item.quantity;
+      for (const p of people) {
+        if (remaining <= 0) break;
+        all[p] = 1;
+        remaining -= 1;
+      }
+      return { ...prev, [item.id]: all };
+    });
+  };
 
   return (
     <div className="space-y-6">
-      <p className="text-xs font-medium text-slate-400">
+      <p className="text-xs font-extrabold tracking-wide text-olive-dark/60 uppercase">
         Item {index + 1} dari {items.length}
       </p>
 
-      <div className="rounded-lg border border-slate-200 p-5">
-        <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          {formatRupiah(item.price)} · {item.type}
+      <div className="rounded-3xl border-2 border-olive-light/60 bg-white p-6 shadow-sm">
+        <h3 className="text-xl font-extrabold text-olive-darker">{item.name}</h3>
+        <p className="mt-1 text-sm font-bold text-olive-dark">
+          {formatRupiah(item.price)} · {ITEM_TYPE_LABEL[item.type] || item.type}
+          {isIndividual && ` · Tersisa ${Math.max(remainingStock, 0)} dari ${item.quantity}`}
         </p>
-        <p className="mt-3 text-sm font-medium text-slate-700">Siapa aja yang makan/pakai ini?</p>
 
-        <ul className="mt-2 space-y-1">
-          {people.map((personName) => (
-            <li key={personName}>
-              <label className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={currentSelection.has(personName)}
-                  onChange={() => togglePerson(item.id, personName)}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                {personName}
-              </label>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-olive-dark">
+            <Users className="h-4 w-4" strokeWidth={2.5} />
+            Siapa yang memesan item ini?
+          </p>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="cursor-pointer text-xs font-extrabold text-olive underline decoration-olive-light decoration-2 underline-offset-2"
+          >
+            {allSelected ? "Batalkan Semua" : "Pilih Semua"}
+          </button>
+        </div>
 
-        {currentSelection.size === 0 && (
-          <p className="mt-3 text-xs text-amber-600">Belum ada yang dipilih untuk item ini.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {people.map((personName) => {
+            const qty = currentSelection[personName] || 0;
+            const selected = qty > 0;
+            // Once an INDIVIDUAL item's stock hits 0, block picking *new* people - but
+            // an already-selected person can still be undone to free up stock again.
+            const locked = isIndividual && !selected && remainingStock <= 0;
+            return (
+              <div
+                key={personName}
+                className={`rounded-2xl border-2 p-3 text-center transition ${
+                  selected ? "border-olive bg-olive/10" : locked ? "border-olive-light/40 bg-cream/50" : "border-olive-light bg-white"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => togglePerson(item.id, personName)}
+                  disabled={locked}
+                  aria-label={`Pilih ${personName}`}
+                  aria-pressed={selected}
+                  className={`flex w-full flex-col items-center gap-1.5 ${
+                    locked ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                  }`}
+                >
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                      selected ? "bg-olive text-white" : "border-2 border-olive-light"
+                    }`}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                  </span>
+                  <span className="w-full truncate text-sm font-bold text-olive-darker">{personName}</span>
+                </button>
+
+                {selected && isIndividual && (
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjustQuantity(item.id, personName, -1)}
+                      className="cursor-pointer flex h-6 w-6 items-center justify-center rounded-full bg-olive-light/60 text-olive-darker active:scale-[0.9]"
+                      aria-label={`Kurangi jumlah untuk ${personName}`}
+                    >
+                      <Minus className="h-3 w-3" strokeWidth={3} />
+                    </button>
+                    <span className="w-4 text-sm font-extrabold text-olive-dark">{qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => adjustQuantity(item.id, personName, 1)}
+                      disabled={remainingStock <= 0}
+                      className="cursor-pointer flex h-6 w-6 items-center justify-center rounded-full bg-olive-light/60 text-olive-darker active:scale-[0.9] disabled:opacity-30"
+                      aria-label={`Tambah jumlah untuk ${personName}`}
+                    >
+                      <Plus className="h-3 w-3" strokeWidth={3} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {Object.keys(currentSelection).length === 0 && (
+          <p className="mt-4 rounded-2xl bg-coral/10 px-4 py-2.5 text-xs font-bold text-coral-dark">
+            Belum ada peserta yang dipilih untuk item ini.
+          </p>
         )}
       </div>
 
       <div className="flex gap-3">
         <button
           type="button"
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          disabled={index === 0}
-          className="flex-1 rounded-md border border-slate-300 py-2 text-sm font-medium text-slate-700 disabled:opacity-40"
+          onClick={() => (index === 0 ? setStep("items") : setIndex((i) => i - 1))}
+          className={`flex-1 cursor-pointer ${BTN_SECONDARY}`}
         >
-          Sebelumnya
+          {index === 0 ? "Kembali ke Item" : "Sebelumnya"}
         </button>
 
         {isLast ? (
@@ -100,23 +234,23 @@ export default function AllocateStep() {
             type="button"
             onClick={() => submitBatch.mutate()}
             disabled={submitBatch.isPending}
-            className="flex-1 rounded-md bg-slate-900 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            className={`flex-1 ${BTN_PRIMARY}`}
           >
-            {submitBatch.isPending ? "Menyimpan..." : "Selesai, lihat ringkasan"}
+            {submitBatch.isPending ? "Menyimpan..." : "Selesai, Lihat Ringkasan"}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
-            className="flex-1 rounded-md bg-slate-900 py-2 text-sm font-semibold text-white"
+            className={`flex-1 cursor-pointer ${BTN_PRIMARY}`}
           >
-            Item selanjutnya
+            Item Selanjutnya
           </button>
         )}
       </div>
 
       {submitBatch.isError && (
-        <p className="text-sm text-red-500">Gagal menyimpan alokasi. Coba lagi.</p>
+        <p className="text-sm font-bold text-coral">Gagal menyimpan alokasi. Silakan coba lagi.</p>
       )}
     </div>
   );

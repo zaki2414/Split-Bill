@@ -76,7 +76,7 @@ export function parseReceiptText(text) {
     items.push({
       name: namePart,
       category,
-      itemType: category === "drink" ? "INDIVIDUAL" : "SHARED",
+      itemType: "INDIVIDUAL",
       totalPrice: price,
       quantity,
       unitPrice: quantity > 0 ? Math.round(price / quantity) : price,

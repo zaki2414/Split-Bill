@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
+@theme {
+  --color-cream: #eff5d2;
+  --color-cream-dark: #e4edb8;
+  --color-olive-light: #c6d870;
+  --color-olive: #8fa31e;
+  --color-olive-dark: #556b2f;
+  --color-olive-darker: #3f4f22;
+  --color-coral: #e0563f;
+  --color-coral-dark: #b8412d;
+}
+
 body {
   margin: 0;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-cream);
 }
 
 /* Plain number inputs, no spin buttons */

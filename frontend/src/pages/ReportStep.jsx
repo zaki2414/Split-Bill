@@ -1,3 +1,4 @@
+import { RotateCcw } from "lucide-react";
 import { useSplitStore } from "../store/splitStore";
 import SettlementReport from "./SettlementReport";
 
@@ -12,9 +13,10 @@ export default function ReportStep() {
       <button
         type="button"
         onClick={reset}
-        className="w-full rounded-md border border-slate-300 py-2.5 text-sm font-medium text-slate-700"
+        className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-olive-light bg-white py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98]"
       >
-        Mulai split bill baru
+        <RotateCcw className="h-4 w-4" strokeWidth={2.5} />
+        Mulai BagiRata Baru
       </button>
     </div>
   );

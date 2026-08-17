@@ -2,47 +2,37 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useSplitStore } from "../store/splitStore";
+import PhotoUpload from "../components/PhotoUpload";
+
+const LABEL = "block text-sm font-bold text-olive-dark";
+const INPUT =
+  "mt-1 w-full rounded-2xl border-2 border-olive-light bg-white px-4 py-2.5 text-sm font-medium text-olive-darker placeholder:text-olive-dark/30 focus:border-olive focus:outline-none focus:ring-4 focus:ring-olive/20";
+const BTN_PRIMARY =
+  "rounded-full bg-olive px-6 py-3 text-sm font-extrabold text-white shadow-md shadow-olive/30 transition active:scale-[0.98] disabled:opacity-40 disabled:shadow-none hover:bg-olive/80";
 
 export default function StartStep() {
-  const [title, setTitle] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
-  const [taxAmount, setTaxAmount] = useState("");
-  const [payerName, setPayerName] = useState("");
-  const [people, setPeople] = useState([]);
-  const [personDraft, setPersonDraft] = useState("");
-  const [createdReceiptId, setCreatedReceiptId] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
-
+  const receiptId = useSplitStore((s) => s.receiptId);
+  const storedTitle = useSplitStore((s) => s.title);
+  const storedPayerName = useSplitStore((s) => s.payerName);
+  const storedPeople = useSplitStore((s) => s.people);
   const setReceipt = useSplitStore((s) => s.setReceipt);
   const setStep = useSplitStore((s) => s.setStep);
+  const isEditing = !!receiptId;
 
-  const createReceipt = useMutation({
-    mutationFn: (payload) => api.post("/api/receipts", payload).then((res) => res.data),
+  const [title, setTitle] = useState(storedTitle || "");
+  const [payerName, setPayerName] = useState(storedPayerName || "");
+  const [people, setPeople] = useState(storedPeople || []);
+  const [personDraft, setPersonDraft] = useState("");
+  const [showPhotoPanel, setShowPhotoPanel] = useState(false);
+
+  const saveReceipt = useMutation({
+    mutationFn: (payload) =>
+      isEditing
+        ? api.put(`/api/receipts/${receiptId}`, payload).then((res) => res.data)
+        : api.post("/api/receipts", payload).then((res) => res.data),
     onSuccess: (receipt) => {
       setReceipt(receipt);
-      setCreatedReceiptId(receipt.id);
-    },
-  });
-
-  const uploadImage = useMutation({
-    mutationFn: (file) => {
-      const formData = new FormData();
-      formData.append("image", file);
-      return api
-        .post(`/api/receipts/${createdReceiptId}/image`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        })
-        .then((res) => res.data);
-    },
-    onSuccess: async (data) => {
-      if (data.extracted_items?.length > 0) {
-        await Promise.all(
-          data.extracted_items.map((item) =>
-            api.post(`/api/receipts/${createdReceiptId}/items`, item)
-          )
-        );
-      }
-      setStep("items");
+      setShowPhotoPanel(true); // always reachable, incl. when editing - lets people re-upload/replace the receipt photo
     },
   });
 
@@ -59,104 +49,47 @@ export default function StartStep() {
     if (payerName === name) setPayerName("");
   };
 
-  const canSubmit = title && payerName && totalAmount && people.length > 0;
+  const canSubmit = title && payerName && people.length > 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canSubmit) return;
-    createReceipt.mutate({
+    saveReceipt.mutate({
       title,
       payerName,
-      totalAmount: Number(totalAmount),
-      taxAmount: taxAmount ? Number(taxAmount) : 0,
       people,
     });
   };
 
-  if (createdReceiptId) {
+  if (showPhotoPanel) {
     return (
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Foto struk (opsional)</label>
-          <p className="mt-1 text-xs text-slate-400">
-            Foto akan dikompres otomatis. Kalau OCR aktif, item-item akan dicoba
-            diekstrak otomatis (tetap bisa dikoreksi di step Items).
-          </p>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            className="mt-2 block w-full text-sm text-slate-700"
-          />
-        </div>
-
-        {uploadImage.isError && (
-          <p className="text-sm text-red-500">Gagal upload foto. Coba lagi atau lewati.</p>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setStep("items")}
-            className="flex-1 rounded-md border border-slate-300 py-2.5 text-sm font-medium text-slate-700"
-          >
-            Lewati
-          </button>
-          <button
-            type="button"
-            onClick={() => (imageFile ? uploadImage.mutate(imageFile) : setStep("items"))}
-            disabled={uploadImage.isPending}
-            className="flex-1 rounded-md bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {uploadImage.isPending ? "Mengupload..." : "Lanjut ke items"}
-          </button>
-        </div>
-      </div>
+      <PhotoUpload
+        receiptId={receiptId}
+        cancelLabel="Lewati"
+        submitLabel="Lanjutkan ke Daftar Item"
+        onCancel={() => setStep("items")}
+        onDone={() => setStep("items")}
+      />
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 rounded-3xl border-2 border-olive-light/60 bg-white p-6 shadow-sm"
+    >
       <div>
-        <label className="block text-sm font-medium text-slate-700">Judul split bill</label>
+        <label className={LABEL}>Judul BagiRata</label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Makan Malam Pizza Hut"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className={INPUT}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700">Total tagihan (Rp)</label>
-        <p className="mt-1 text-xs text-slate-400">Total akhir di struk, sudah termasuk pajak/service.</p>
-        <input
-          type="number"
-          min="0"
-          value={totalAmount}
-          onChange={(e) => setTotalAmount(e.target.value)}
-          placeholder="120000"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Pajak / service charge (opsional, Rp)</label>
-        <p className="mt-1 text-xs text-slate-400">
-          Dibagi proporsional sesuai porsi makanan tiap orang, bukan rata.
-        </p>
-        <input
-          type="number"
-          min="0"
-          value={taxAmount}
-          onChange={(e) => setTaxAmount(e.target.value)}
-          placeholder="12500"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Siapa aja yang ikut split?</label>
+        <label className={LABEL}>Siapa Saja yang Terlibat?</label>
         <div className="mt-1 flex gap-2">
           <input
             value={personDraft}
@@ -167,13 +100,13 @@ export default function StartStep() {
                 addPerson();
               }
             }}
-            placeholder="Nama orang"
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Nama peserta"
+            className={`flex-1 ${INPUT}`}
           />
           <button
             type="button"
             onClick={addPerson}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            className="mt-1 cursor-pointer rounded-full bg-olive-dark px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-olive-darker active:scale-[0.98]"
           >
             Tambah
           </button>
@@ -183,13 +116,13 @@ export default function StartStep() {
             {people.map((name) => (
               <li
                 key={name}
-                className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                className="flex items-center gap-1.5 rounded-full bg-olive-light/60 px-3.5 py-1.5 text-sm font-bold text-olive-darker"
               >
                 {name}
                 <button
                   type="button"
                   onClick={() => removePerson(name)}
-                  className="text-slate-400 hover:text-red-500"
+                  className="text-olive-dark/60 hover:text-coral"
                   aria-label={`Hapus ${name}`}
                 >
                   ×
@@ -202,12 +135,8 @@ export default function StartStep() {
 
       {people.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-slate-700">Siapa yang bayar?</label>
-          <select
-            value={payerName}
-            onChange={(e) => setPayerName(e.target.value)}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
+          <label className={LABEL}>Siapa yang Melakukan Pembayaran?</label>
+          <select value={payerName} onChange={(e) => setPayerName(e.target.value)} className={INPUT}>
             {people.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -217,16 +146,16 @@ export default function StartStep() {
         </div>
       )}
 
-      {createReceipt.isError && (
-        <p className="text-sm text-red-500">Gagal membuat split bill. Coba lagi.</p>
+      {saveReceipt.isError && (
+        <p className="text-sm font-bold text-coral">Gagal menyimpan BagiRata. Silakan coba lagi.</p>
       )}
 
       <button
         type="submit"
-        disabled={!canSubmit || createReceipt.isPending}
-        className="w-full rounded-md bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+        disabled={!canSubmit || saveReceipt.isPending}
+        className={`w-full cursor-pointer ${BTN_PRIMARY}`}
       >
-        {createReceipt.isPending ? "Membuat..." : "Lanjut"}
+        {saveReceipt.isPending ? "Menyimpan..." : isEditing ? "Simpan Perubahan" : "Lanjutkan"}
       </button>
     </form>
   );

@@ -5,9 +5,9 @@ function formatRupiah(amount) {
 // Builds a plain-language settlement summary, e.g.:
 // "Budi bayar ke Adi: Rp60.000"
 export function formatSettlementReport(receipt, settlements) {
-  const heading = receipt.title || receipt.merchantName || "Split Bill";
+  const heading = receipt.title || receipt.merchantName || "BagiRata";
   const lines = settlements.map(
-    (s) => `${s.owerName} bayar ke ${s.payerName}: ${formatRupiah(s.amount)}`
+    (s) => `${s.owerName} harus membayar: ${formatRupiah(s.amount)}`
   );
 
   const tax = Number(receipt.taxAmount) || 0;
@@ -19,10 +19,10 @@ export function formatSettlementReport(receipt, settlements) {
     `Dibayar oleh: ${receipt.payerName}`,
     "",
     `Subtotal: ${formatRupiah(subtotal)}`,
-    tax > 0 ? `Pajak/service: ${formatRupiah(tax)}` : null,
+    tax > 0 ? `Pajak/Biaya Layanan: ${formatRupiah(tax)}` : null,
     `Total: ${formatRupiah(receipt.totalAmount)}`,
     "",
-    lines.length > 0 ? "Rincian:" : "Belum ada settlement untuk dilaporkan.",
+    lines.length > 0 ? "Rincian Pembagian:" : "Belum ada rincian pembagian untuk dilaporkan.",
     ...lines.map((line) => `- ${line}`),
   ]
     .filter((line) => line !== null)

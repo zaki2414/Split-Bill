@@ -6,6 +6,7 @@ export const useSplitStore = create((set) => ({
   title: "",
   payerName: "",
   totalAmount: 0,
+  taxAmount: 0,
   people: [],
   items: [],
 
@@ -15,6 +16,7 @@ export const useSplitStore = create((set) => ({
       title: receipt.title,
       payerName: receipt.payerName,
       totalAmount: Number(receipt.totalAmount),
+      taxAmount: Number(receipt.taxAmount || 0),
       people: receipt.people.map((p) => p.personName),
     }),
   setItems: (items) => set({ items }),
@@ -26,6 +28,7 @@ export const useSplitStore = create((set) => ({
       title: "",
       payerName: "",
       totalAmount: 0,
+      taxAmount: 0,
       people: [],
       items: [],
     }),

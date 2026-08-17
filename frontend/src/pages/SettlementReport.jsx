@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Copy } from "lucide-react";
 import { api } from "../lib/api";
 
-const formatRupiah = (n) => `Rp${Math.round(Number(n)).toLocaleString("id-ID")}`;
+const formatRupiah = (n) =>
+  `Rp${Math.round(Number(n)).toLocaleString("id-ID")}`;
 
 // Text report + per-settlement paid status for a given receipt.
 // Shared between the wizard's final step and the history detail view.
@@ -12,18 +14,21 @@ export default function SettlementReport({ receiptId }) {
 
   const reportQuery = useQuery({
     queryKey: ["report", receiptId],
-    queryFn: () => api.get(`/api/receipts/${receiptId}/report`).then((res) => res.data),
+    queryFn: () =>
+      api.get(`/api/receipts/${receiptId}/report`).then((res) => res.data),
     enabled: !!receiptId,
   });
 
   const settlementsQuery = useQuery({
     queryKey: ["settlements", receiptId],
-    queryFn: () => api.get(`/api/settlements/${receiptId}`).then((res) => res.data),
+    queryFn: () =>
+      api.get(`/api/settlements/${receiptId}`).then((res) => res.data),
     enabled: !!receiptId,
   });
 
   const markPaid = useMutation({
-    mutationFn: (settlementId) => api.post(`/api/settlements/${settlementId}/pay`, { status: "paid" }),
+    mutationFn: (settlementId) =>
+      api.post(`/api/settlements/${settlementId}/pay`, { status: "paid" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settlements", receiptId] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
@@ -41,8 +46,8 @@ export default function SettlementReport({ receiptId }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800">
+      <div className="rounded-3xl bg-olive-dark p-6 shadow-lg shadow-olive-dark/20">
+        <pre className="font-sans text-sm font-bold whitespace-pre-wrap text-cream">
           {reportQuery.data?.text || (reportQuery.isLoading ? "Memuat..." : "")}
         </pre>
       </div>
@@ -50,28 +55,51 @@ export default function SettlementReport({ receiptId }) {
       <button
         type="button"
         onClick={handleCopy}
-        className="w-full rounded-md border border-slate-300 py-2 text-sm font-medium text-slate-700"
+        className="cursor-pointer flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-olive-light bg-white py-3 text-sm font-extrabold text-olive-dark transition hover:bg-cream active:scale-[0.98]"
       >
-        {copied ? "Tersalin!" : "Salin laporan"}
+        {copied ? (
+          <>
+            <Check className="h-4 w-4" strokeWidth={2.5} />
+            Tersalin
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4" strokeWidth={2.5} />
+            Salin Laporan
+          </>
+        )}
       </button>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">Status pembayaran</h3>
-        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        <h3 className="mb-2 text-sm font-extrabold text-olive-dark">
+          Status Pembayaran
+        </h3>
+        <ul className="divide-y-2 divide-cream overflow-hidden rounded-3xl border-2 border-olive-light/60 bg-white">
           {settlements.map((s) => (
-            <li key={s.id} className="flex items-center justify-between px-4 py-3 text-sm">
-              <span>
-                {s.owerName} → {s.payerName}: {formatRupiah(s.amount)}
-              </span>
+            <li
+              key={s.id}
+              className="flex items-center justify-between px-5 py-4 text-sm"
+            >
+              <div>
+                <span className="font-bold text-olive-darker">
+                  {s.owerName} → {s.payerName}
+                </span>
+                <p className="font-extrabold text-olive-dark">
+                  {formatRupiah(s.amount)}
+                </p>
+              </div>
               {s.status === "paid" ? (
-                <span className="text-xs font-medium text-emerald-600">Lunas</span>
+                <span className="flex items-center gap-1 rounded-full bg-olive-light/50 px-3 py-1.5 text-xs font-extrabold text-olive-darker">
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                  Lunas
+                </span>
               ) : (
                 <button
                   onClick={() => markPaid.mutate(s.id)}
                   disabled={markPaid.isPending}
-                  className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+                  className="cursor-pointer rounded-full bg-olive px-4 py-2 text-xs font-extrabold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-40"
                 >
-                  Tandai lunas
+                  Tandai Lunas
                 </button>
               )}
             </li>

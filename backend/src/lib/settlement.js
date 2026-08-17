@@ -60,9 +60,12 @@ export function calculateSettlements({ items, allocations, payerName, totalAmoun
     settlements.push({ owerName: person, payerName, amount: round2(amount) });
   }
 
+  // Small differences (< Rp1.000) are normal rounding dust from splitting prices across
+  // people (e.g. Rp10.000 / 3 people) - not worth warning about, so the split can proceed.
+  const ROUNDING_TOLERANCE = 1000;
   const totalConsumed = Object.values(consumptionByPerson).reduce((sum, v) => sum + v, 0);
   const diff = Math.abs(totalConsumed - Number(totalAmount));
-  if (diff > 0.01) {
+  if (diff >= ROUNDING_TOLERANCE) {
     warnings.push(
       `Allocated total incl. tax (${totalConsumed.toFixed(2)}) does not match receipt total (${Number(totalAmount).toFixed(2)})`
     );
